@@ -1,5 +1,5 @@
 # AutoTaskRest
-A collection of PowerShell scripts, that allow time sheeting and ticket information to be extract from Autotask
+A collection of PowerShell scripts, that allow time sheeting and ticket information to be extracted from Autotask
 
 The purpose is to allow extact for analysis and reports,
   * showing the non completed tickets, with an emphasis on normal tickets older than 7 daya , and onHold/Waiting tickets older than 30
