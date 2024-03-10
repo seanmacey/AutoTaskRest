@@ -1,7 +1,14 @@
 # AutoTaskRest
 A collection of PowerShell scripts, that allow time sheeting and ticket information to be extract from Autotask
 
-before this code will connect  to autotask and extract data, you must 'Set-LoginKissAT' and enter username, password and APID. these details are then encrypted and saved in a user file. the credential and APIID are only decryptable by the user that created them and on the machine they were created on. the password and APIID do not appear as clear text within the module (they are handled as secureStrings)
+The purpose is to allow extact for analysis and reports,
+  * showing the non completed tickets, with an emphasis on normal tickets older than 7 daya , and onHold/Waiting tickets older than 30
+  * showing productivity of Staff, and comparing that againts their expected working hours
+  * showing where effort was spent on billing and non billable productive work
+
+before this code will connect to autotask and extract data, you must <code>Set-LoginKissAT</code> and enter username, password and APID.
+
+these details are then encrypted and saved in a user file. the credential and APIID are only decryptable by the user that created them and on the machine they were created on. the password and APIID do not appear as clear text within the module (they are handled as secureStrings)
 
 
 Most of the functions have inbuilt help- - just the Man command (example below)
