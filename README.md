@@ -7,6 +7,10 @@ The purpose is to allow extact for analysis and reports,
   * showing where effort was spent on billing and non billable productive work
 
 before this code will connect to autotask and extract data, you must <code>Set-LoginKissAT</code> and enter username, password and APID.
+<code>
+. ./AutotaskRest.ps1 #to load the scripts inot powershell memory, or you can rename to AutotaskRest.PSM1 and deploy it as a mondule
+Set-LoginKissAT
+</code>
 
 these details are then encrypted and saved in a user file. the credential and APIID are only decryptable by the user that created them and on the machine they were created on. the password and APIID do not appear as clear text within the module (they are handled as secureStrings)
 
