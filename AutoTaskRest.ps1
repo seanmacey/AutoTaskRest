@@ -128,12 +128,12 @@ function Invoke-AutoTaskAPI {
 
         # [Parameter(ParameterSetName = 'raw', Mandatory = $false)]
         [switch]
-        $returnRaw = $false,
+        $returnRaw = $false
 
 
-        [string]$apiUsername,
-        [string]$apiPassword,
-        [string]$apiID
+        # [string]$apiUsername,
+        # [string]$apiPassword,
+        # [string]$apiID
 
     )
 
@@ -162,9 +162,9 @@ function Invoke-AutoTaskAPI {
 
 
 
-    if ($apiusername) { $saveobj.UserName = $apiusername }
-    if ($apipassword) { $saveobj.Secret = $apipassword }
-    if ($apiID) { $saveobj.atapi = $apiID }
+    # if ($apiusername) { $saveobj.UserName = $apiusername }
+    # if ($apipassword) { $saveobj.Secret = $apipassword }
+    # if ($apiID) { $saveobj.atapi = $apiID }
 
 
 
@@ -1300,11 +1300,11 @@ function export-KissATTickets() {
         [int]
         $LastActionAfter = 0
     )
-
+    New-Item -ItemType Directory -Name data -ErrorAction SilentlyContinue |Out-Null
     if ($LastActionAfter -gt 0)  {
-        Read-AutoTaskTickets -LastxMonths $LastActionAfter | Export-csv TicketsActioned.csv -NoTypeInformation
+        Read-AutoTaskTickets -LastxMonths $LastActionAfter | Export-csv data\TicketsActioned.csv -NoTypeInformation
     }
-    Read-AutoTaskTickets -IncludeAllNonComplete | Export-csv TicketsNotCompleted.csv -NoTypeInformation
+    Read-AutoTaskTickets -IncludeAllNonComplete | Export-csv data\TicketsNotCompleted.csv -NoTypeInformation
 
 }
 
