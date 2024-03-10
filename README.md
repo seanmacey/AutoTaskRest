@@ -26,7 +26,7 @@ man Get-KissATCompanies
   
 I gleaned information from https://autotask.net/help/DeveloperHelp/Content/APIs/REST/REST_API_Home.htm in order to build these scripts
 
-<h2>How datetime fields are handled</h2>h2>
+<h2>How datetime fields are handled</h2>
 the API needs to be date local invariant, so the searchable date text date format is used 
 EXAMPLE  When making a ContractServiceAdjustments call, the effectiveDate is submitted as 2023-10-09T02:00:00.00, that is, 2 AM on October 9. Because the API intakes calls in UTC, if that call is made to a US database (UTC + 5), it would seem to change the effective date to October 8th at 9 PM, due to the time zone conversion.
 However, because there is no time field in the UI for service adjustments, we don't convert timezone datetime values for date-only fields, we just set the time portion to midnight and accept the date value.
