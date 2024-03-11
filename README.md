@@ -1,5 +1,5 @@
 # AutoTaskRest
-A collection of PowerShell scripts, that allow time sheeting and ticket information to be extract from Autotask
+A collection of PowerShell scripts, that allow time sheeting and ticket information to be extracted from Autotask
 
 The purpose is to allow extact for analysis and reports,
   * showing the non completed tickets, with an emphasis on normal tickets older than 7 daya , and onHold/Waiting tickets older than 30
@@ -26,12 +26,12 @@ man Get-KissATCompanies
   
 I gleaned information from https://autotask.net/help/DeveloperHelp/Content/APIs/REST/REST_API_Home.htm in order to build these scripts
 
-<h2>How datetime fields are handled</h2>h2>
+<h2>How datetime fields are handled</h2>
 the API needs to be date local invariant, so the searchable date text date format is used 
-EXAMPLE  When making a ContractServiceAdjustments call, the effectiveDate is submitted as 2023-10-09T02:00:00.00, that is, 2 AM on October 9. Because the API intakes calls in UTC, if that call is made to a US database (UTC + 5), it would seem to change the effective date to October 8th at 9 PM, due to the time zone conversion.
+EXAMPLE  When making a ContractServiceAdjustments call, the effectiveDate is submitted as <b>2023-10-09T02:00:00.00</b>, that is, 2 AM on October 9. Because the API intakes calls in UTC, if that call is made to a US database (UTC + 5), it would seem to change the effective date to October 8th at 9 PM, due to the time zone conversion.
 However, because there is no time field in the UI for service adjustments, we don't convert timezone datetime values for date-only fields, we just set the time portion to midnight and accept the date value.
 
-In the example above, the datetime would be saved in the database as 2023-10-08T00:00:00.00.
+In the example above, the datetime would be saved in the database as <b>2023-10-08T00:00:00.00</b>.
 powershell can create this format  example: <code>$Monthstart.ToString("yyyy-MM-ddTHH:mm:ss")</code>
 
 
