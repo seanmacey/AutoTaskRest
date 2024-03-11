@@ -181,7 +181,7 @@ function Invoke-AutoTaskAPI {
         Invoke-RestMethod -Method Get -Uri $url  -Headers $kissATheader  -SkipHeaderValidation
         return
     }
-    if ($urlFixedSuffix){
+    if ($urlFixedSuffix) {
         $url2 = "$($saveobj.url)$UrlFixedSuffix"
         Write-Verbose "Invoke-AutoTaskAPI get Raw data based on $url2"
         Invoke-RestMethod -Method Get -Uri $url2  -Headers $kissATheader  -SkipHeaderValidation
@@ -397,15 +397,27 @@ function Read-AutoTaskCompanies {
     if ($exactNameMatch) { $op = "eq" } else { $op = "contains" } 
     
     switch ($true) {
-        { $id -ge 0 } { $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -id $id ; break }
+        { $id -ge 0 } {
+            write-host "Read-AUtoTaskCompanies - for a single ID $id"
+            $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -id $id ; break 
+        }
         { $CompanyName } {
+            write-host "Read-AUtoTaskCompanies - for a exact match :$companyName"
             [string]$srch = "{""op"":""$op"",""Field"":""companyName"",""value"":""$companyName""}"  #{"op":"contains","Field":"companyName","value":"imatec"}
             $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -includeFields $includeFields -SearchFirstBy Nothing  -SearchFurtherBy $srch; break 
         }
-        { $includeInactive -eq $true } { $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -includeFields $includeFields -SearchFirstBy id ; break }
-        default { $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -includeFields $includeFields -SearchFirstBy isActive }
+        { $includeInactive -eq $true } { 
+            write-host "Read-AUtoTaskCompanies - for ALL companies including inactive"
+            $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -includeFields $includeFields -SearchFirstBy id ; break 
+        }
+        default {
+            write-host "Read-AUtoTaskCompanies - for ALL Active companies"
+            $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -includeFields $includeFields -SearchFirstBy isActive 
+        }
     }
 
+    if ($rc)
+    {
     Convert-ObjArrayDateTimesToSearchableStrings -obj $rc #|Out-Null
 
 
@@ -440,8 +452,9 @@ function Read-AutoTaskCompanies {
 
         }
     }
-
+    write-host "Done Read-AUtoTaskCompanies" -foregroundColor Green
     return $rc
+}
 }
 
 function Build-AutoTaskInternalTicketsTime() {
@@ -481,7 +494,7 @@ function Build-AutoTaskInternalTicketsTime() {
 
 
     $earliestDate = ($timeEntries | Measure-Object dateWorked -min).Minimum
-    $CompanyTickets = Read-AutoTaskTickets -LastActionFromDate $earliestDate -CompanyIDs (29762985 , 0, 1, 29740186 , 29761818, 29762138)
+    $CompanyTickets = Read-AutoTaskTickets -LastActionFromDate $earliestDate -CompanyIDs (29762985 , 0, 1, 29740186 , 29761818, 29762138,29718567,29762986)
    
     $InternalEntries = $timeEntries | Where-Object TicketID -in $CompanyTickets.id
 
@@ -698,7 +711,7 @@ function Read-AutoTaskEngineers() {
 
     $result = Invoke-AutoTaskAPI -entityName 'v1.0/Resources' -includeFields $includeFields -SearchFurtherBy '{"op":"noteq","Field":"userType","value":"17"}'  -isActive:$isActive
     
-   # $result | Add-Member -NotePropertyName dailyHrs -NotePropertyValue $DeafultDailyHrs
+    # $result | Add-Member -NotePropertyName dailyHrs -NotePropertyValue $DeafultDailyHrs
     $DailyAvialabilities = Invoke-AutoTaskAPI -entityName 'v1.0/ResourceDailyAvailabilities'
 
     foreach ($Resource in $result) {
@@ -715,7 +728,7 @@ function Read-AutoTaskEngineers() {
 
 
     # ($result | Where-Object userName -eq "rogelio.vera").dailyHrs = 4
-    write-Host "-DONE Polling Autotask about Resources (Engineers)"
+    write-Host "DONE Polling Autotask about Resources (Engineers)" -ForegroundColor Green
     return $result
 }
 
@@ -789,7 +802,7 @@ function Read-AutoTaskTimeEntries() {
         
     )
 
-     write-Host "Polling AutoTask for TimeEntries, and formating the results"
+    write-Host "Polling AutoTask for TimeEntries, and formating the results"
     $CURRENTDATE = GET-DATE -Hour 0 -Minute 0 -Second 0
     $Monthstart = $CURRENTDATE.AddMonths(-$LastxMonths)
     #$Monthstart = $CURRENTDATE.AddDays(-7)
@@ -829,11 +842,10 @@ function Read-AutoTaskTimeEntries() {
     
     
   
-#create a numerically sortable date field
-foreach ($i in $timeentries)
-{
-    $i.OADate = ([datetime]$i.dateWorked).ToOADate()
-}
+    #create a numerically sortable date field
+    foreach ($i in $timeentries) {
+        $i.OADate = ([datetime]$i.dateWorked).ToOADate()
+    }
 
 
     #---------------
@@ -963,7 +975,7 @@ foreach ($i in $timeentries)
 
     Build-AutoTaskInternalTicketsTime $timeentries | Out-Null
     Build-AutoTaskRMMTime $timeentries | Out-Null
-    write-Host "DONE polling AutoTask for TimeEntries, and formating the results"
+    write-Host "DONE polling AutoTask for TimeEntries, and formating the results" -foregroundcolor green
 
     return $timeentries
    
@@ -996,19 +1008,25 @@ function export-KissAtCompanies() {
         #[Parameter(AttributeValues)]
         [ValidateSet("CSV", "JSON")]
         [string]
-        $exportType = "CSV"
+        $exportType = "CSV",
+        [string]
+        $path 
     )
-
+    if ($path){$path = "$path\\"}
+    write-host "Export-KissAtCompanies will take about 3 minutes to run!"
     switch ($exportType) {
         "CSV" {
-            Invoke-AutoTaskAPI -entityName 'v1.0/ClassificationIcons' -includeFields "id", "name" | export-csv KissAtClassificationIcons.csv -NoTypeInformation 
-            Read-AutoTaskCompanies | export-csv KissAtCompanies.csv -NoTypeInformation 
+            write-host "export-KissAtCompanies =>Exporting ClassificationIcons"
+            Invoke-AutoTaskAPI -entityName 'v1.0/ClassificationIcons' -includeFields "id", "name" | export-csv "$($path)KissAtClassificationIcons.csv" -NoTypeInformation 
+            write-host "export-KissAtCompanies =>Exporting Companies"
+            Read-AutoTaskCompanies -includeInactive -GetEngineers | export-csv "$($path)KissAtCompanies.csv" -NoTypeInformation 
         }
         default {
 
         }
 
     }
+    write-host "Done Export-KissAtCompanies" -ForegroundColor green
 }
 
 
@@ -1071,22 +1089,22 @@ function Build-AutotaskDailyTimeStats {
     [CmdletBinding()]
     param (
         # Parameter help description
-        [Parameter(Position = 0, Mandatory=$true)]   
+        [Parameter(Position = 0, Mandatory = $true)]   
         [PSCustomObject]        $TimeEntries,
         [datetime]$UntilDate = (get-date) # check u timesheeted days for resources from earliest in toimesheet until this time - so ignore leave requests and future bookings when filling gaps
     )
 
 
 
-     $allresources = Read-AutoTaskEngineers
-      $Resources = $allresources | Where-Object { ($_.id -in $TimeEntries.resourceID) }  ## gets resources in time entries
+    $allresources = Read-AutoTaskEngineers
+    $Resources = $allresources | Where-Object { ($_.id -in $TimeEntries.resourceID) }  ## gets resources in time entries
     # $ResourcesThatcouldhavetimesheeted = $allresources | Where-Object {($_.DailyAvailabilities.MondayAvailableHours -or $_.DailyAvailabilities.TuesdayAvailableHours -or $_.DailyAvailabilities.WednesdayAvailableHours -or $_.DailyAvailabilities.ThursdayAvailableHours -or $_.DailyAvailabilities.FridayAvailableHours -or $_.DailyAvailabilities.SaturdayAvailableHours -or $_.DailyAvailabilities.SundayAvailableHours  )}
-     $Resources += $allresources | Where-Object {($_.isActive) -and ($_.DailyAvailabilities.MondayAvailableHours -or $_.DailyAvailabilities.TuesdayAvailableHours -or $_.DailyAvailabilities.WednesdayAvailableHours -or $_.DailyAvailabilities.ThursdayAvailableHours -or $_.DailyAvailabilities.FridayAvailableHours -or $_.DailyAvailabilities.SaturdayAvailableHours -or $_.DailyAvailabilities.SundayAvailableHours  )}
+    $Resources += $allresources | Where-Object { ($_.isActive) -and ($_.DailyAvailabilities.MondayAvailableHours -or $_.DailyAvailabilities.TuesdayAvailableHours -or $_.DailyAvailabilities.WednesdayAvailableHours -or $_.DailyAvailabilities.ThursdayAvailableHours -or $_.DailyAvailabilities.FridayAvailableHours -or $_.DailyAvailabilities.SaturdayAvailableHours -or $_.DailyAvailabilities.SundayAvailableHours  ) }
     #$resourcesThatShouldTimeSheet = $Resources | Select-Object * -Unique
     
     write-verbose "Build-AutotaskDailyTimeStats: Resources that are expected to be timesheeting $($resources.username -join (', '))"
     $LastDate = $UntilDate
-    $LastDateOA =$LastDate.ToOADate()
+    $LastDateOA = $LastDate.ToOADate()
     $StartDate = [datetime](($timeEntries | Measure-Object dateWorked -min).Minimum)
     
   
@@ -1259,22 +1277,31 @@ function export-KissAtTimerecords() {
         #[Parameter(AttributeValues)]
         [ValidateSet("CSV", "JSON")]
         [string]
-        $exportType = "CSV"
+        $exportType = "CSV",
+        [string]$path
     )
     Write-Host "export-KissAtTimerecords: will take some time to run"
+    write-host " export-KissAtCompanies =>preparing Time Entries"
+
     $i = Read-AutoTaskTimeEntries -LastxMonths $LastxMonths
 
     $earliestDate = ($i | Measure-Object dateWorked -min).Minimum
+    write-host " export-KissAtCompanies =>preparing Ticket Details"
+
     $Tickets = Read-AutoTaskTickets -LastActionFromDate $earliestDate
+    if ($path) {$path = "$path\\"}
 
     switch ($exportType) {
         "CSV" {
-            Invoke-AutoTaskAPI -entityName 'v1.0/BillingCodes' | Export-csv KissBillingCodes.csv -NoTypeInformation
-            Read-AutoTaskEngineers | export-csv KissEngineers.csv -NoTypeInformation
-            # $i = Read-AutoTaskTimeEntries -LastxMonths $LastxMonths 
-            $i | export-csv KissTimeEntries.csv -NoTypeInformation
-            Build-AutotaskDailyTimeStats -TimeEntries $i | Export-Csv KissDaily.csv -NoTypeInformation
-            $Tickets | Export-Csv KissTickets.csv -NoTypeInformation
+            write-host " export-KissAtCompanies =>Billing Codes"
+
+            Invoke-AutoTaskAPI -entityName 'v1.0/BillingCodes' | Export-csv "$($path)KissBillingCodes.csv" -NoTypeInformation
+            write-host " export-KissAtCompanies =>Resources (Engineers) and timeEntries"
+            Read-AutoTaskEngineers | export-csv "$($path)KissEngineers.csv" -NoTypeInformation
+            $i | export-csv "$($path)KissTimeEntries.csv" -NoTypeInformation
+            write-host " export-KissAtCompanies =>DailyTime Stats and tickets"
+            Build-AutotaskDailyTimeStats -TimeEntries $i | Export-Csv "$($path)KissDaily.csv" -NoTypeInformation
+            $Tickets | Export-Csv "$($path)KissTickets.csv" -NoTypeInformation
 
             #  Invoke-AutoTaskAPI -entityName 'v1.0/ResourceTimeOffBalances' | Export-csv ResourceTimeOffBalances.csv -NoTypeInformation
 
@@ -1292,19 +1319,23 @@ function export-KissAtTimerecords() {
         }
 
     }
+    write-host "Done export-KissAtCompanies" -ForegroundColor green
 }
 
 function export-KissATTickets() {
     param (
         [Parameter(Mandatory = $false)]
         [int]
-        $LastActionAfter = 0
+        $LastActionAfter = 0,
+        [string]$path
     )
-    New-Item -ItemType Directory -Name data -ErrorAction SilentlyContinue |Out-Null
-    if ($LastActionAfter -gt 0)  {
-        Read-AutoTaskTickets -LastxMonths $LastActionAfter | Export-csv data\TicketsActioned.csv -NoTypeInformation
+
+    if ($path) {$path = "$path\\"}
+    New-Item -ItemType Directory -Name data -ErrorAction SilentlyContinue | Out-Null
+    if ($LastActionAfter -gt 0) {
+        Read-AutoTaskTickets -LastxMonths $LastActionAfter | Export-csv "$($path)TicketsActioned.csv" -NoTypeInformation
     }
-    Read-AutoTaskTickets -IncludeAllNonComplete | Export-csv data\TicketsNotCompleted.csv -NoTypeInformation
+    Read-AutoTaskTickets -IncludeAllNonComplete | Export-csv "$($path)\TicketsNotCompleted.csv" -NoTypeInformation
 
 }
 
@@ -1440,19 +1471,18 @@ function Read-AutoTaskTickets {
         [int[]]
         $CompanyIDs, # =    (29762985 , 0, 1, 29740186 , 29761818, 29762138), #      Imatec Solutions (As Customer), then several Kiss companies
         [DateTime]
-        $LastActionFromDate = (Get-date),# [dateTime]"2023-01-01T00:00:00",
+        $LastActionFromDate = (Get-date), # [dateTime]"2023-01-01T00:00:00",
         [string]
         $TitleContains,
         [string]
         $TitleBeginsWith,
         [switch]$ReturnAllFields = $false,
         [switch]$IncludeAllNonComplete = $false,
-        [switch]$DontexpandticketInformation=$false
+        [switch]$DontexpandticketInformation = $false
         #$LastActionFromDate = (get-date).AddMonths(-3)
     )
     write-host "Read-AutoTaskTickets: polling autotask for ticket information"
-    if (!($DontexpandticketInformation))
-    {
+    if (!($DontexpandticketInformation)) {
         $ticketinfo = Read-AutotaskTicketInformation
     }
 
@@ -1474,40 +1504,84 @@ function Read-AutoTaskTickets {
     # $searchby =$searchby -replace ' ',''
 
 
-    if ($ReturnAllFields) {$includeFields = $null}
+    if ($ReturnAllFields) { $includeFields = $null }
     else {
-        $includeFields = ('id', 'TicketNumber','CompanyID', 'completedDate', 'createDate', 'firstResponseDateTime', 'lastActivityDate', 'status', 'tickettype','completedDate', 'title','assignedResourceID','queueid')
+        $includeFields = ('id', 'TicketNumber', 'CompanyID', 'completedDate', 'createDate', 'firstResponseDateTime', 'lastActivityDate', 'status', 'tickettype', 'completedDate', 'title', 'assignedResourceID', 'queueid')
     }
 
-    if ($IncludeAllNonComplete){
+    if ($IncludeAllNonComplete) {
         # OR two operands so that we can get noncomplete tickets as well as any other Searcth
-        $searchby = '{"op":"or","items":[{"op":"notExist","Field":"completedDate"}' + ',' + $searchby +']}'
+        $searchby = '{"op":"or","items":[{"op":"notExist","Field":"completedDate"}' + ',' + $searchby + ']}'
     }
 
     #write-host $i
     write-verbose "Read-AutoTaskTickets: search by : $searchby"
     $items = Invoke-AutoTaskAPI -entityName 'v1.0/Tickets' -includeFields $includeFields  -SearchFurtherBy $searchby -SearchFirstBy Nothing
+    
+    #return $items
     if ($items) {
-        if ($ticketinfo){
-            $items |Add-Member -NotePropertyName QueueName -NotePropertyValue "" -Force
-            $items |Add-Member -NotePropertyName StatusName -NotePropertyValue "" -Force
-            $items |Add-Member -NotePropertyName ResourceName -NotePropertyValue "" -Force
+        if ($ticketinfo) {
+            $items | Add-Member -NotePropertyName QueueName -NotePropertyValue "" -Force
+            $items | Add-Member -NotePropertyName StatusName -NotePropertyValue "" -Force
+            $items | Add-Member -NotePropertyName ResourceName -NotePropertyValue "" -Force
+            # $items |Add-Member -NotePropertyName Company -NotePropertyValue "" -Force
+            
             $Resources = Read-AutoTaskEngineers
-         foreach ($titem in $items)
-         {
-            $titem.QueueName = (($ticketinfo.queueID) |Where-Object value -eq $titem.queueID |Select-Object label -first 1).label
-            $titem.StatusName = (($ticketinfo.status) |Where-Object value -eq $titem.status |Select-Object label -first 1).label
-            if ($titem.assignedResourceID) {$titem.ResourceName = ($Resources  |Where-Object id -eq $titem.assignedResourceID |Select-Object  -first 1).userName }
+            foreach ($titem in $items) {
+                $titem.QueueName = (($ticketinfo.queueID) | Where-Object value -eq $titem.queueID | Select-Object label -first 1).label
+                $titem.StatusName = (($ticketinfo.status) | Where-Object value -eq $titem.status | Select-Object label -first 1).label
+                if ($titem.assignedResourceID) { $titem.ResourceName = ($Resources  | Where-Object id -eq $titem.assignedResourceID | Select-Object  -first 1).userName }
            
-         }            
+            } 
+          
+
+
+         
+
         }
 
-         Convert-ObjArrayDateTimesToSearchableStrings $items 
-        }
+        Convert-ObjArrayDateTimesToSearchableStrings $items 
+    }
     $items
     write-host "DONE -Read-AutoTaskTickets: polling autotask for ticket information" -ForegroundColor Green
 }
-function Read-AutotaskTicketInformation{
+
+function Find-CompaniesInTickets(){
+    <#
+    .SYNOPSIS
+    gets a collection of companies for which the tickets belong
+    -- this can take a long time -( eg 3 minutes just for 100 outstanding tickets)
+    
+    .DESCRIPTION
+    Long description
+    
+    .PARAMETER tickets
+    Parameter description
+    
+    .EXAMPLE
+    An example
+    
+    .NOTES
+    General notes
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter()]
+        [object[]]
+        $tickets
+    )
+    $companies = $tickets | Group-Object CompanyID
+    foreach ($companyID in $companies) {
+        $company = (Read-AutoTaskCompanies -id $companyID.Name | Select-Object -First 1)
+        $company
+        #$tcompanies.Group.Company = "KK"#$companyName
+      #  $CompanyID.Group | Add-Member -NotePropertyName Company -NotePropertyValue "$($company.CompanyName)" -Force
+    }
+
+}
+
+
+function Read-AutotaskTicketInformation {
     <#
     .SYNOPSIS
     provides an object listing (SOME) of the known status types usedby tickets
@@ -1531,18 +1605,18 @@ function Read-AutotaskTicketInformation{
     )
 
     Write-Host "Read-TicketInformation Polling Autotask for TicketInformation queues, status etc. values "
-$fields = (invoke-AutoTaskAPI -UrlFixedSuffix v1.0//Tickets/entityInformation/fields).fields #(name,picklistvalues[value,label,isactive)
+    $fields = (invoke-AutoTaskAPI -UrlFixedSuffix v1.0//Tickets/entityInformation/fields).fields #(name,picklistvalues[value,label,isactive)
 
-[PSCustomObject]@{
-    queueID = ($fields|where-object name -eq "queueID" | Select-Object  * -First 1).picklistValues
-    status = ($fields|where-object name -eq "status" | Select-Object  * -First 1).picklistValues 
-    issueType = ($fields|where-object name -eq "issueType" | Select-Object  * -First 1).picklistValues 
-    monitorTypeID = ($fields|where-object name -eq "monitorTypeID" | Select-Object  * -First 1).picklistValues 
-    TicketCategory = ($fields|where-object name -eq "TicketCategory" | Select-Object  * -First 1).picklistValues 
-    ticketType = ($fields|where-object name -eq "ticketType" | Select-Object  * -First 1).picklistValues 
-}
+    [PSCustomObject]@{
+        queueID        = ($fields | where-object name -eq "queueID" | Select-Object  * -First 1).picklistValues
+        status         = ($fields | where-object name -eq "status" | Select-Object  * -First 1).picklistValues 
+        issueType      = ($fields | where-object name -eq "issueType" | Select-Object  * -First 1).picklistValues 
+        monitorTypeID  = ($fields | where-object name -eq "monitorTypeID" | Select-Object  * -First 1).picklistValues 
+        TicketCategory = ($fields | where-object name -eq "TicketCategory" | Select-Object  * -First 1).picklistValues 
+        ticketType     = ($fields | where-object name -eq "ticketType" | Select-Object  * -First 1).picklistValues 
+    }
 
-Write-Host "DONE-Read-TicketInformation Polling Autotask for Read-TicketInformation queues, status etc. values" -ForegroundColor Green
+    Write-Host "DONE-Read-TicketInformation Polling Autotask for Read-TicketInformation queues, status etc. values" -ForegroundColor Green
 }
 
 
