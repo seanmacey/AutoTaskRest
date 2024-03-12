@@ -1473,7 +1473,7 @@ function Test-AutoTaskConnection {
 
     }
     catch {
-        Write-host "sorry but those credentials did not work, Your previous credentials is they exist will be kept"
+        Write-host "sorry but those credentials did not work, Your previous credentials if they exist will be kept"
         Write-host "Please try again if you want to change your credentials" -ForegroundColor Yellow
         
         return
