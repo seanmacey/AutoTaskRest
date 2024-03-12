@@ -1449,6 +1449,23 @@ function Set-loginAutotask() {
 }
 
 function Test-AutoTaskConnection {
+
+    if (test-path -path "$kissATAPIpath\$kissATAPIfile" ) {
+        $jsn = Get-Content "$kissATAPIpath\$kissATAPIfile"
+        if ($jsn) { $r = $jsn | ConvertFrom-Json }
+        if ($r.url -and $r.secret -and $r.username -and $r.atapi) {
+            #saved data exists and is valid , so import it
+            write-host "will test the cxonnection using credentials for $($r.username)"
+
+        }
+    }
+    else {
+        write-host " **** there were no saved credentials"
+        Write-Warning "You must first Set-LoginAtotask and save your APID and credentials"
+        return
+    }
+
+
     try {
         $r = Invoke-AutoTaskAPI -url https://webservices6.autotask.net/atservicesrest/v1.0/Version -returnRaw
         Write-host "Connection to the AutoaTask API was successfull: Your credentials work!" -BackgroundColor Green
