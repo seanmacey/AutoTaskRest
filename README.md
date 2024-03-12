@@ -8,7 +8,7 @@ The purpose is to allow extact for analysis and reports,
 
 before this code will connect to autotask and extract data, you must <code>Set-LoginKissAT</code> and enter username, password and APID.
 <code>
-. ./AutotaskRest.ps1 #to load the scripts inot powershell memory, or you can rename to AutotaskRest.PSM1 and deploy it as a mondule
+. ./AutotaskRest.ps1 #to load the scripts into powershell memory, or you can rename to AutotaskRest.PSM1 and deploy it as a mondule
 Set-LoginKissAT
 </code>
 
