@@ -1,5 +1,5 @@
-$global:kissATAPIpath = "$home/kiss-atapi"
-$global:kissATAPIfile = "kissAtapilogin.json"
+$global:kissATAPIpath = "$home\kiss-atapi"
+$global:kissATAPIfile = 'kissAtapilogin.json'
 
 
 # check for to test REST API  https://webservices6.autotask.net/ATServicesRest/swagger/ui/index
@@ -161,6 +161,10 @@ function Invoke-AutoTaskAPI {
     }
 
 
+    $saveobj.secret =  $saveobj.Secret | Convertto-SecureString
+    $BSTR =  [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($saveobj.secret)
+    $saveobj.Secret =[System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+    #write-verbose "Secret is $($saveobj.secret)"
 
     # if ($apiusername) { $saveobj.UserName = $apiusername }
     # if ($apipassword) { $saveobj.Secret = $apipassword }
@@ -168,23 +172,26 @@ function Invoke-AutoTaskAPI {
 
 
 
-    $kissATheader = @{'ApiIntegrationCode' = $saveobj.atapi | Convertto-SecureString | ConvertFrom-SecureString -AsPlainText
+    $kissATheader = @{'ApiIntegrationCode' = $saveobj.atapi #| Convertto-SecureString | ConvertFrom-SecureString -AsPlainText
         'UserName'                         = $saveobj.UserName
-        'Secret'                           = $saveobj.Secret | Convertto-SecureString | ConvertFrom-SecureString -AsPlainText
+        'Secret'                           = $saveobj.Secret #| Convertto-SecureString #| ConvertFrom-SecureString #-AsPlainText
         'Content-Type'                     = "application/json"
     }
 
 
+    $BSTR =  [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Plainpassword)
+    $r.Secret =[System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+
 
     if ($url -and ($returnRaw -eq $true)) {
         Write-Verbose "Invoke-AutoTaskAPI get RAw data based on $url"
-        Invoke-RestMethod -Method Get -Uri $url  -Headers $kissATheader  -SkipHeaderValidation
+        Invoke-RestMethod -Method Get -Uri $url  -Headers $kissATheader  #-SkipHeaderValidation
         return
     }
     if ($urlFixedSuffix) {
         $url2 = "$($saveobj.url)$UrlFixedSuffix"
         Write-Verbose "Invoke-AutoTaskAPI get Raw data based on $url2"
-        Invoke-RestMethod -Method Get -Uri $url2  -Headers $kissATheader  -SkipHeaderValidation
+        Invoke-RestMethod -Method Get -Uri $url2  -Headers $kissATheader  #-SkipHeaderValidation
         return
 
 
@@ -195,7 +202,7 @@ function Invoke-AutoTaskAPI {
         # $url2 = "$urlstart$entityName/$ID"
         $url2 = "$($saveobj.url)$entityName/$ID"
         Write-Verbose "Invoke-AutoTaskAPI getiing just one $entityname item $id : $url2"
-        $Result = Invoke-RestMethod -Method Get -Uri $url2  -Headers $kissATheader  -SkipHeaderValidation #-FollowRelLink
+        $Result = Invoke-RestMethod -Method Get -Uri $url2  -Headers $kissATheader  #-SkipHeaderValidation #-FollowRelLink
         Write-Verbose "Invoke-AutoTaskAPI item count=$($result.item.count)"
         if ($ReturnRaw -eq $true) {
             write-host "Returning raw data, and not an object collection "
@@ -242,7 +249,7 @@ function Invoke-AutoTaskAPI {
     else { $url2 = $url }
     
     Write-verbose "getiing  $entityname items  $url2"
-    $Result = Invoke-RestMethod -Method Get -Uri $url2  -Headers $kissATheader  -SkipHeaderValidation
+    $Result = Invoke-RestMethod -Method Get -Uri $url2  -Headers $kissATheader  #-SkipHeaderValidation
     $apidata = $Result.items
     
     #now prepare the next 500 items
@@ -1383,7 +1390,8 @@ function Set-loginAutotask() {
         [string]
         $l_pass,
         [string]
-        $l_apiid
+        $l_apiid,
+        [switch]$Force = $false
     )
 
     $saveobj = @{
@@ -1408,14 +1416,23 @@ function Set-loginAutotask() {
         }
     }
     if ($l_username) { $saveobj.UserName = $l_username }
-    if ($l_pass) { $saveobj.Secret = $l_lpass }
-    if ($l_atapi) { $saveobj.atapi = $l_atapi }
+    if ($l_pass) { $saveobj.Secret = $l_pass  |ConvertTo-SecureString -AsPlainText -Force # this converts it to secure string
+        $saveobj.Secret = $saveobj.Secret |ConvertFrom-SecureString  # this encrypts it
+        }
+
+    if ($l_apiid) { $saveobj.atapi = $l_apiid }
+
+    write-verbose "user = $($saveobj.UserName)"
+    write-verbose "pass = $($saveobj.Secret)"
+    write-verbose "atapi = $($saveobj.atapi)"
     
 
     if ($saveobj.userName) {
         Write-Host "there is already definition saved : for $($saveobj.UserName)"
         write-host "  If you wish to keep the old settings, then just hit return on that field without entering anything"
     }
+
+ 
   
     $i = read-host -Prompt "Enter a new API USER "
     
@@ -1434,29 +1451,42 @@ function Set-loginAutotask() {
 
     $i = read-host -Prompt "Enter the USER's password (Alphanumerical and special)" -AsSecureString -ErrorAction SilentlyContinue
     if ($i.length -gt 0) {
-        $saveobj.Secret = $i | ConvertFrom-SecureString  
+        $saveobj.Secret = $i | ConvertFrom-SecureString  # makes it a secure string, then encrypts it
     }
    
 
     $i = read-host -Prompt "Enter the AT-API-ID  {alphanumerical}" -AsSecureString -ErrorAction SilentlyContinue
-    if ($i.length -gt 0) { $saveobj.atapi = $i  | ConvertFrom-SecureString }
+    if ($i.length -gt 0) { $saveobj.atapi = $i   }
 
+
+ 
 
     $jsn2 = ConvertTo-Json $saveobj
-    Set-Content "$kissATAPIpath\$kissATAPIfile" -Value $jsn2
-    if (!(Test-AutoTaskConnection)) { Set-Content "$kissATAPIpath\$kissATAPIfile" -Value $jsn }
+
+    Write-Verbose "Json = $jsn2"
+    Write-verbose "setting json content to $kissATAPIpath\$kissATAPIfile"
+    #Set-Content "$kissATAPIpath\$kissATAPIfile" -Value $jsn2
+    #if ($force -or!(Test-AutoTaskConnection) -or $Force) { Set-Content "$kissATAPIpath\$kissATAPIfile" -Value $jsn2 }
+    switch ($force){
+        
+        $true {Set-Content "$kissATAPIpath\$kissATAPIfile" -Value $jsn2; break }
+        (Test-AutoTaskConnection -eq $false) {Set-Content "$kissATAPIpath\$kissATAPIfile" -Value $jsn2; break}
+
+        default {}
+    }
 
 }
 
 function Test-AutoTaskConnection {
-
+    [CmdletBinding()]
+    param()
     if (test-path -path "$kissATAPIpath\$kissATAPIfile" ) {
         $jsn = Get-Content "$kissATAPIpath\$kissATAPIfile"
+        write-verbose "saved JSON = $jsn"
         if ($jsn) { $r = $jsn | ConvertFrom-Json }
         if ($r.url -and $r.secret -and $r.username -and $r.atapi) {
             #saved data exists and is valid , so import it
             write-host "will test the cxonnection using credentials for $($r.username)"
-
         }
     }
     else {
@@ -1465,13 +1495,23 @@ function Test-AutoTaskConnection {
         return
     }
 
+ $Plainpassword = $r.Secret |Convertto-SecureString 
+ $BSTR =  [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Plainpassword)
+ $r.Secret =[System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+
+    write-verbose "user = $($r.UserName)"
+   # write-verbose "pass = $($r.Secret )"
+    write-verbose "atapi = $($r.atapi )"
+   # return $r
 
     try {
-        $r = Invoke-AutoTaskAPI -url https://webservices6.autotask.net/atservicesrest/v1.0/Version -returnRaw
-        Write-host "Connection to the AutoaTask API was successfull: Your credentials work!" -BackgroundColor Green
-        $r
 
+        $result = Invoke-AutoTaskAPI -url https://webservices6.autotask.net/atservicesrest/v1.0/Version -returnRaw
+        Write-host "Connection to the AutoaTask API was successfull: Your credentials work!" -BackgroundColor Green
+        $result
+ 
     }
+  
     catch {
         Write-host "sorry but those credentials did not work, Your previous credentials if they exist will be kept"
         Write-host "Please try again if you want to change your credentials" -ForegroundColor Yellow
