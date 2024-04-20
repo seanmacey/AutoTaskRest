@@ -58,12 +58,8 @@ function Invoke-AutoTaskAPI {
     specifies how many times this function will be recursively called before giving up: defasult is 40
     thesre is a limit like this so as to avoid for ever loops....
 
-    .PARAMETER apiUsername
-    instead of using this ,use the Set-loginAutotask function and save them in an encrypted file for later autoconnect
-    .PARAMETER apiPassword
-    instead of using this ,use the Set-loginAutotask function and save them in an encrypted file for later autoconnect
-    .PARAMETER apiId
-    instead of using this ,use the Set-loginAutotask function and save them in an encrypted file for later autoconnect
+    .PARAMETER LoginINfo
+    OPTIONAL : An object containing the header details needed for authentication - if this is not used then the saved details will be
     
     .EXAMPLE
     Invoke-AutoTaskAPI -entityName ClassificationIcons -includeFields "id", "name"
@@ -128,7 +124,9 @@ function Invoke-AutoTaskAPI {
 
         # [Parameter(ParameterSetName = 'raw', Mandatory = $false)]
         [switch]
-        $returnRaw = $false
+        $returnRaw = $false,
+
+        [PSCustomObject]$LoginInfo
 
 
         # [string]$apiUsername,
@@ -137,40 +135,53 @@ function Invoke-AutoTaskAPI {
 
     )
 
-    $saveobj = @{
-        atapi    = ''#ConvertFrom-SecureString -SecureString $l_Apiid
-        UserName = ''#"$apiusername"
-        Secret   = '' #ConvertFrom-SecureString -SecureString $l_secret
-        url      = ''# "$($r.url)"
+    # $saveobj = @{
+    #     atapi    = ''#ConvertFrom-SecureString -SecureString $l_Apiid
+    #     UserName = ''#"$apiusername"
+    #     Secret   = '' #ConvertFrom-SecureString -SecureString $l_secret
+    #     url      = ''# "$($r.url)"
+    # }
+    if ($LoginINfo) {
+        Write-Verbose "Invoke-AutoTask: using the paramatised LoginInfo instead of the pre-saved authentication details"
+        $saveobj = $LoginINfo
     }
-
-    if (test-path -path "$kissATAPIpath\$kissATAPIfile" ) {
+    elseif (test-path -path "$kissATAPIpath\$kissATAPIfile" ) {
         $jsn = Get-Content "$kissATAPIpath\$kissATAPIfile"
-        if ($jsn) { $r = $jsn | ConvertFrom-Json }
-        if ($r.url -and $r.secret -and $r.username -and $r.atapi) {
+        if ($jsn) { $saveobj = $jsn | ConvertFrom-Json }
+        if ($saveobj.url -and $saveobj.secret -and $saveobj.username -and $saveobj.atapi) {
             #saved data exists and is valid , so import it
-            $saveobj = $r
-            write-debug "url is $($saveobj.url)"
-            # $saveobj.url = 'https://webservices6.autotask.net/atservicesrest/v1.0/'
+            # $saveobj = $r
+            $saveobj.secret = $saveobj.Secret | Convertto-SecureString
+            $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($($saveobj.secret))
+            $saveobj.Secret = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+            #  [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) 
+            write-debug "Invoke-AutoTask: url is $($saveobj.url)"
+ 
         }
     }
     else {
-        write-host " **** there were no saved credentials"
+        write-host " **** Invoke-AutoTask: there were no saved credentials"
         Write-Warning "You must first Set-LoginAtotask and save your APID and credentials"
-        throw "AutotaskRest app: You must first Set-LoginAtotask and save your APID and credentials"
+        throw "Invoke-AutoTask: You must first Set-LoginAtotask and save your APID and credentials"
+        return
     }
 
+    if (!($saveobj.url) -or !($saveobj.secret) -or !($saveobj.username) -or !($saveobj.atapi)) {
+        write-Host "Invoke-AutoTask: Cant login with $($saveobj.username )"
+        throw "Invoke-AutoTaskAPI: At least one of the Authentication parameters is missing"
+        return
+    }
 
-    $saveobj.secret =  $saveobj.Secret | Convertto-SecureString
-    $BSTR =  [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($saveobj.secret)
-    $saveobj.Secret =[System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
-    #write-verbose "Secret is $($saveobj.secret)"
-
-    # if ($apiusername) { $saveobj.UserName = $apiusername }
-    # if ($apipassword) { $saveobj.Secret = $apipassword }
-    # if ($apiID) { $saveobj.atapi = $apiID }
+    
 
 
+
+
+
+ 
+    # $Plainpassword = $r.Secret | Convertto-SecureString  
+    # $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Plainpassword)
+    # $Plainpassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
 
     $kissATheader = @{'ApiIntegrationCode' = $saveobj.atapi #| Convertto-SecureString | ConvertFrom-SecureString -AsPlainText
         'UserName'                         = $saveobj.UserName
@@ -178,10 +189,9 @@ function Invoke-AutoTaskAPI {
         'Content-Type'                     = "application/json"
     }
 
-
-    $BSTR =  [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Plainpassword)
-    $r.Secret =[System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
-
+    #----- Delete line once debugging finished
+    #  Write-Debug "KissATheader = $($kissATheader |ConvertTo-Json)"
+    #----------
 
     if ($url -and ($returnRaw -eq $true)) {
         Write-Verbose "Invoke-AutoTaskAPI get RAw data based on $url"
@@ -205,7 +215,7 @@ function Invoke-AutoTaskAPI {
         $Result = Invoke-RestMethod -Method Get -Uri $url2  -Headers $kissATheader  #-SkipHeaderValidation #-FollowRelLink
         Write-Verbose "Invoke-AutoTaskAPI item count=$($result.item.count)"
         if ($ReturnRaw -eq $true) {
-            write-host "Returning raw data, and not an object collection "
+            write-host "Invoke-AutoTaskAPI Returning raw data, and not an object collection "
             return $result
         }
         return $Result.Item
@@ -423,45 +433,44 @@ function Read-AutoTaskCompanies {
         }
     }
 
-    if ($rc)
-    {
-    Convert-ObjArrayDateTimesToSearchableStrings -obj $rc #|Out-Null
+    if ($rc) {
+        Convert-ObjArrayDateTimesToSearchableStrings -obj $rc #|Out-Null
 
 
-    $rc = $rc | select-Object -Property * , @{name = "Branch"; e = { $_.userDefinedFields[0].value } } -ErrorAction SilentlyContinue | Select-Object -ExcludeProperty userDefinedFields
-    #$rc = $rc | Select-Object -ExcludeProperty userDefinedFields
+        $rc = $rc | select-Object -Property * , @{name = "Branch"; e = { $_.userDefinedFields[0].value } } -ErrorAction SilentlyContinue | Select-Object -ExcludeProperty userDefinedFields
+        #$rc = $rc | Select-Object -ExcludeProperty userDefinedFields
 
-    if ($GetEngineers) {
-        $rc | Add-Member -NotePropertyName Primary -NotePropertyValue ""
-        $rc | Add-Member -NotePropertyName Secondary -NotePropertyValue ""
-        $AllPrimeTechnicians = Read-PrimeEngineers
-        # this updates the objects in $array1
-        foreach ($i in $rc) {
-            $thisprime = $AllPrimeTechnicians | Where-Object CompanyID -eq $i.id | Select-Object -First 1
-            if ($thisprime) {
-                $i.primary = $thisprime.primary
-                $i.secondary = $thisprime.secondary
+        if ($GetEngineers) {
+            $rc | Add-Member -NotePropertyName Primary -NotePropertyValue ""
+            $rc | Add-Member -NotePropertyName Secondary -NotePropertyValue ""
+            $AllPrimeTechnicians = Read-PrimeEngineers
+            # this updates the objects in $array1
+            foreach ($i in $rc) {
+                $thisprime = $AllPrimeTechnicians | Where-Object CompanyID -eq $i.id | Select-Object -First 1
+                if ($thisprime) {
+                    $i.primary = $thisprime.primary
+                    $i.secondary = $thisprime.secondary
+                }
             }
         }
-    }
 
-    # get special comments about company
-    $classificationIcons = Read-AutoTaskCompanyClassificationIcons
-    $rc | Add-Member -NotePropertyName 'ClassificationDetails' -NotePropertyValue "" -Force
-    if ($classificationIcons) {
-        $CompanyGroups = $rc | Where-Object classification | Group-Object classification
+        # get special comments about company
+        $classificationIcons = Read-AutoTaskCompanyClassificationIcons
+        $rc | Add-Member -NotePropertyName 'ClassificationDetails' -NotePropertyValue "" -Force
+        if ($classificationIcons) {
+            $CompanyGroups = $rc | Where-Object classification | Group-Object classification
     
-        foreach ($item in $CompanyGroups ) {
-            if ($item.name) {
-                $classificationDetail = ($classificationIcons | Where-Object id -eq ($item.name)).description
-                $item.group | Add-Member -NotePropertyName 'ClassificationDetails' -NotePropertyValue "$classificationDetail" -Force
-            }
+            foreach ($item in $CompanyGroups ) {
+                if ($item.name) {
+                    $classificationDetail = ($classificationIcons | Where-Object id -eq ($item.name)).description
+                    $item.group | Add-Member -NotePropertyName 'ClassificationDetails' -NotePropertyValue "$classificationDetail" -Force
+                }
 
+            }
         }
+        write-host "Done Read-AUtoTaskCompanies" -foregroundColor Green
+        return $rc
     }
-    write-host "Done Read-AUtoTaskCompanies" -foregroundColor Green
-    return $rc
-}
 }
 
 function Build-AutoTaskInternalTicketsTime() {
@@ -501,7 +510,7 @@ function Build-AutoTaskInternalTicketsTime() {
 
 
     $earliestDate = ($timeEntries | Measure-Object dateWorked -min).Minimum
-    $CompanyTickets = Read-AutoTaskTickets -LastActionFromDate $earliestDate -CompanyIDs (29762985 , 0, 1, 29740186 , 29761818, 29762138,29718567,29762986)
+    $CompanyTickets = Read-AutoTaskTickets -LastActionFromDate $earliestDate -CompanyIDs (29762985 , 0, 1, 29740186 , 29761818, 29762138, 29718567, 29762986)
    
     $InternalEntries = $timeEntries | Where-Object TicketID -in $CompanyTickets.id
 
@@ -1019,7 +1028,7 @@ function export-KissAtCompanies() {
         [string]
         $path 
     )
-    if ($path){$path = "$path\\"}
+    if ($path) { $path = "$path\\" }
     write-host "Export-KissAtCompanies will take about 3 minutes to run!"
     switch ($exportType) {
         "CSV" {
@@ -1296,7 +1305,7 @@ function export-KissAtTimerecords() {
     write-host " export-KissAtCompanies =>preparing Ticket Details"
 
     $Tickets = Read-AutoTaskTickets -LastActionFromDate $earliestDate
-    if ($path) {$path = "$path\\"}
+    if ($path) { $path = "$path\\" }
 
     switch ($exportType) {
         "CSV" {
@@ -1337,7 +1346,7 @@ function export-KissATTickets() {
         [string]$path
     )
 
-    if ($path) {$path = "$path\\"}
+    if ($path) { $path = "$path\\" }
     New-Item -ItemType Directory -Name data -ErrorAction SilentlyContinue | Out-Null
     if ($LastActionAfter -gt 0) {
         Read-AutoTaskTickets -LastxMonths $LastActionAfter | Export-csv "$($path)TicketsActioned.csv" -NoTypeInformation
@@ -1408,7 +1417,10 @@ function Set-loginAutotask() {
     else {
         if (test-path -path "$kissATAPIpath\$kissATAPIfile" ) {
             $jsn = Get-Content "$kissATAPIpath\$kissATAPIfile"
-            if ($jsn) { $r = $jsn | ConvertFrom-Json }
+            if ($jsn) {
+                write-host "there was a prexisting saved login of $jsn"
+                $r = $jsn  | ConvertFrom-Json 
+            }
             if ($r.url -and $r.secret -and $r.username -and $r.atapi) {
                 #saved data exists and is valid , so import it
                 $saveobj = $r
@@ -1416,14 +1428,15 @@ function Set-loginAutotask() {
         }
     }
     if ($l_username) { $saveobj.UserName = $l_username }
-    if ($l_pass) { $saveobj.Secret = $l_pass  |ConvertTo-SecureString -AsPlainText -Force # this converts it to secure string
-        $saveobj.Secret = $saveobj.Secret |ConvertFrom-SecureString  # this encrypts it
-        }
+    if ($l_pass) {
+        $saveobj.Secret = $l_pass  | ConvertTo-SecureString -AsPlainText -Force # this converts it to secure string
+        $saveobj.Secret = $saveobj.Secret | ConvertFrom-SecureString  # this encrypts it
+    }
 
     if ($l_apiid) { $saveobj.atapi = $l_apiid }
 
     write-verbose "user = $($saveobj.UserName)"
-    write-verbose "pass = $($saveobj.Secret)"
+    write-verbose "pass = hiiden"#$($saveobj.Secret)"
     write-verbose "atapi = $($saveobj.atapi)"
     
 
@@ -1455,8 +1468,8 @@ function Set-loginAutotask() {
     }
    
 
-    $i = read-host -Prompt "Enter the AT-API-ID  {alphanumerical}" -AsSecureString -ErrorAction SilentlyContinue
-    if ($i.length -gt 0) { $saveobj.atapi = $i   }
+    $i = read-host -Prompt "Enter the AT-API-ID  {alphanumerical}" #-AsSecureString -ErrorAction SilentlyContinue
+    if ($i.length -gt 0) { $saveobj.atapi = $i }
 
 
  
@@ -1465,58 +1478,107 @@ function Set-loginAutotask() {
 
     Write-Verbose "Json = $jsn2"
     Write-verbose "setting json content to $kissATAPIpath\$kissATAPIfile"
-    #Set-Content "$kissATAPIpath\$kissATAPIfile" -Value $jsn2
-    #if ($force -or!(Test-AutoTaskConnection) -or $Force) { Set-Content "$kissATAPIpath\$kissATAPIfile" -Value $jsn2 }
-    switch ($force){
-        
-        $true {Set-Content "$kissATAPIpath\$kissATAPIfile" -Value $jsn2; break }
-        (Test-AutoTaskConnection -eq $false) {Set-Content "$kissATAPIpath\$kissATAPIfile" -Value $jsn2; break}
 
-        default {}
-    }
+    # switch ($force) {
+        
+    #     $true { Set-Content "$kissATAPIpath\$kissATAPIfile" -Value $jsn2; break }
+    #     ((Test-AutoTaskConnection -LoginInfo $saveobj) ) { Set-Content "$kissATAPIpath\$kissATAPIfile" -Value $jsn2; break }
+
+    #     default {}
+    # }
+
+   $testresult = Test-AutoTaskConnection -LoginInfo $saveobj
+   $testresult
+   if ($testresult) {
+    write-Host "Set-LoginAutotask:Saving the entered Login becasue the test connection was successfull"
+   }
+   elseif ($force -eq $true){
+    write-Host "Set-LoginAutotask: even though this login did not work, we are saving it because the FORCE paramater was used"
+   }
+   else {
+    write-Host "Set-LoginAutotask: Not saving a thing, becasue the login didn't work"
+    return
+   }
+   write-host "setcontent on  $kissATAPIpath\$kissATAPIfile   value $jsn2"
+    Set-Content "$kissATAPIpath\$kissATAPIfile" -Value $jsn2
 
 }
 
 function Test-AutoTaskConnection {
     [CmdletBinding()]
-    param()
-    if (test-path -path "$kissATAPIpath\$kissATAPIfile" ) {
+    param(
+        [PSCustomObject]$LoginInfo,
+        [switch]$LoginInfoPasswordAsPlainText
+
+
+ 
+    )
+    if ($LoginInfo) {
+        Write-verbose "Test-AutoTaskConnection: will use the parametised LoginInfo  to test, and not the presaved"
+            
+        
+        write-verbose "Test-AutoTaskConnection: Parameters are $($loginfo |ConvertTo-Json)"
+        $r = $LoginInfo
+        if ($LoginInfoPasswordAsPlainText -ne $true) {
+            $Plainpassword = $LoginInfo.Secret | Convertto-SecureString 
+            $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Plainpassword) 
+            $r.Secret = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+            [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)   
+          #  write-verbose "the login that will be tested is  = $($r |ConvertTo-Json)"    
+        }
+    }
+
+    elseif (test-path -path "$kissATAPIpath\$kissATAPIfile" ) {
         $jsn = Get-Content "$kissATAPIpath\$kissATAPIfile"
-        write-verbose "saved JSON = $jsn"
+        write-verbose "Test-AutoTaskConnection: saved JSON = $jsn"
         if ($jsn) { $r = $jsn | ConvertFrom-Json }
         if ($r.url -and $r.secret -and $r.username -and $r.atapi) {
             #saved data exists and is valid , so import it
-            write-host "will test the cxonnection using credentials for $($r.username)"
+            write-host "Test-AutoTaskConnection: will test the connection using credentials for $($r.username)"
+            $Plainpassword = $r.Secret | Convertto-SecureString         
+            #  $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Plainpassword)
+            $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Plainpassword) 
+            $r.Secret = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+            [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)       
         }
     }
     else {
-        write-host " **** there were no saved credentials"
-        Write-Warning "You must first Set-LoginAtotask and save your APID and credentials"
-        return
+        write-host " **** Test-AutoTaskConnection: there were no saved credentials and no parameters supplied"
+        Write-Warning "Test-AutoTaskConnection: You must first Set-LoginAutotask and save your APID and credentials"
+        return $null
     }
 
- $Plainpassword = $r.Secret |Convertto-SecureString 
- $BSTR =  [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Plainpassword)
- $r.Secret =[System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+    if (!($r.url) -or !($r.secret) -or !($r.username) -or !($r.atapi)) {
+        write-Host "Test-AutoTaskConnection:  At least one of the Authentication parameters are missing"
+        return $null
+    }
 
-    write-verbose "user = $($r.UserName)"
-   # write-verbose "pass = $($r.Secret )"
-    write-verbose "atapi = $($r.atapi )"
-   # return $r
+    if (!($r.Secret)) {
+        #the password is EMPTY - so return NULL
+        Write-host "Test-AutoTaskConnection: Your Login Password was BLANK / NULL so this login will not work" -ForegroundColor Yellow
+        return $null
+    } 
+
+
+    write-verbose "the login that will be tested is  = $($r |ConvertTo-Json)"
+
 
     try {
 
-        $result = Invoke-AutoTaskAPI -url https://webservices6.autotask.net/atservicesrest/v1.0/Version -returnRaw
-        Write-host "Connection to the AutoaTask API was successfull: Your credentials work!" -BackgroundColor Green
-        $result
+        Invoke-AutoTaskAPI -url 'https://webservices6.autotask.net/ATservicesRest/v1.0/Version'  -returnRaw -LoginINfo $r
+        Write-host "Test-AutoTaskConnection: Connection to the AutoaTask API was successfull: Your credentials work!" -BackgroundColor Green
+        return  $true
  
+
+
     }
-  
+
     catch {
-        Write-host "sorry but those credentials did not work, Your previous credentials if they exist will be kept"
-        Write-host "Please try again if you want to change your credentials" -ForegroundColor Yellow
+        write-host "Test-AutoTaskConnection: sorry but those credentials did not work"
+        write-host "$(($error[0]).Exception.Message)"-ForegroundColor Yellow
+        write-host "please try again if you want to change your credentials" -foregroundcolor yellow
         
-        return
+        return $null
     }
     
 }
@@ -1603,7 +1665,7 @@ function Read-AutoTaskTickets {
     write-host "DONE -Read-AutoTaskTickets: polling autotask for ticket information" -ForegroundColor Green
 }
 
-function Find-CompaniesInTickets(){
+function Find-CompaniesInTickets() {
     <#
     .SYNOPSIS
     gets a collection of companies for which the tickets belong
@@ -1632,7 +1694,7 @@ function Find-CompaniesInTickets(){
         $company = (Read-AutoTaskCompanies -id $companyID.Name | Select-Object -First 1)
         $company
         #$tcompanies.Group.Company = "KK"#$companyName
-      #  $CompanyID.Group | Add-Member -NotePropertyName Company -NotePropertyValue "$($company.CompanyName)" -Force
+        #  $CompanyID.Group | Add-Member -NotePropertyName Company -NotePropertyValue "$($company.CompanyName)" -Force
     }
 
 }
