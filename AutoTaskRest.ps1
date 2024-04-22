@@ -1342,16 +1342,16 @@ function export-KissATTickets() {
     param (
         [Parameter(Mandatory = $false)]
         [int]
-        $LastActionAfter = 0,
+        $WhereLastActionOccurWithinLastMonths = 0,
         [string]$path
     )
 
     if ($path) { $path = "$path\\" }
     New-Item -ItemType Directory -Name data -ErrorAction SilentlyContinue | Out-Null
     if ($LastActionAfter -gt 0) {
-        Read-AutoTaskTickets -LastxMonths $LastActionAfter | Export-csv "$($path)TicketsActioned.csv" -NoTypeInformation
+        Read-AutoTaskTickets -LastxMonths $WhereLastActionOccurWithinLastMonths | Export-csv "$($path)TicketsActioned.csv" -NoTypeInformation
     }
-    Read-AutoTaskTickets -IncludeAllNonComplete | Export-csv "$($path)\TicketsNotCompleted.csv" -NoTypeInformation
+    Read-AutoTaskTickets -IncludeAllNonComplete | Export-csv "$($path)TicketsNotCompleted.csv" -NoTypeInformation
 
 }
 
