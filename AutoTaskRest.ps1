@@ -660,7 +660,7 @@ function Read-PrimeEngineers() {
     
     #Get prime and secondary
     Write-Host "Polling Autotask for Company(Client) Prime and (Secondary) Engineers"
-    $u = Invoke-AutoTaskAPI -entityName 'v1.0/CompanyAlerts' -SearchFirstBy Nothing -SearchFurtherBy "{""op"":""eq"",""Field"":""alertTypeID"",""value"":""1""},{""op"":""contains"",""Field"":""alertText"",""value"":""Tech""}"  -Verbose
+    $u = Invoke-AutoTaskAPI -entityName 'v1.0/CompanyAlerts' -SearchFirstBy Nothing -SearchFurtherBy "{""op"":""eq"",""Field"":""alertTypeID"",""value"":""1""},{""op"":""contains"",""Field"":""alertText"",""value"":""Tech""}" # -Verbose
     [System.Object[]]$PrimeTechnicians = $null
     foreach ($l in $u) {
         $assignedTech = [PSCustomObject]@{
