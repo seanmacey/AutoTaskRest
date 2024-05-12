@@ -1033,9 +1033,9 @@ function export-KissAtCompanies() {
     switch ($exportType) {
         "CSV" {
             write-host "export-KissAtCompanies =>Exporting ClassificationIcons"
-            Invoke-AutoTaskAPI -entityName 'v1.0/ClassificationIcons' -includeFields "id", "name" | export-csv "$($path)KissAtClassificationIcons.csv" -NoTypeInformation 
+            Invoke-AutoTaskAPI -entityName 'v1.0/ClassificationIcons' -includeFields "id", "name" | export-csv "$($path)KissAtClassificationIcons.csv" -NoTypeInformation -Force
             write-host "export-KissAtCompanies =>Exporting Companies"
-            Read-AutoTaskCompanies -includeInactive -GetEngineers | export-csv "$($path)KissAtCompanies.csv" -NoTypeInformation 
+            Read-AutoTaskCompanies -includeInactive -GetEngineers | export-csv "$($path)KissAtCompanies.csv" -NoTypeInformation -Force
         }
         default {
 
@@ -1311,25 +1311,25 @@ function export-KissAtTimerecords() {
         "CSV" {
             write-host " export-KissAtCompanies =>Billing Codes"
 
-            Invoke-AutoTaskAPI -entityName 'v1.0/BillingCodes' | Export-csv "$($path)KissBillingCodes.csv" -NoTypeInformation
+            Invoke-AutoTaskAPI -entityName 'v1.0/BillingCodes' | Export-csv "$($path)KissBillingCodes.csv" -NoTypeInformation -Force
             write-host " export-KissAtCompanies =>Resources (Engineers) and timeEntries"
-            Read-AutoTaskEngineers | export-csv "$($path)KissEngineers.csv" -NoTypeInformation
-            $i | export-csv "$($path)KissTimeEntries.csv" -NoTypeInformation
+            Read-AutoTaskEngineers | export-csv "$($path)KissEngineers.csv" -NoTypeInformation -Force
+            $i | export-csv "$($path)KissTimeEntries.csv" -NoTypeInformation -Force
             write-host " export-KissAtCompanies =>DailyTime Stats and tickets"
-            Build-AutotaskDailyTimeStats -TimeEntries $i | Export-Csv "$($path)KissDaily.csv" -NoTypeInformation
-            $Tickets | Export-Csv "$($path)KissTickets.csv" -NoTypeInformation
+            Build-AutotaskDailyTimeStats -TimeEntries $i | Export-Csv "$($path)KissDaily.csv" -NoTypeInformation -Force
+            $Tickets | Export-Csv "$($path)KissTickets.csv" -NoTypeInformation -Force
 
             #  Invoke-AutoTaskAPI -entityName 'v1.0/ResourceTimeOffBalances' | Export-csv ResourceTimeOffBalances.csv -NoTypeInformation
 
             #Holiday and Holidayset records not in use
         }
         default {
-            Invoke-AutoTaskAPI -entityName 'v1.0/BillingCodes' | ConvertTo-Json | Out-File -FilePath KissBillingCodes.json
-            Read-AutoTaskEngineers | ConvertTo-Json | Out-File -FilePath KissEngineers.json 
+            Invoke-AutoTaskAPI -entityName 'v1.0/BillingCodes' | ConvertTo-Json | Out-File -FilePath KissBillingCodes.json -Force
+            Read-AutoTaskEngineers | ConvertTo-Json | Out-File -FilePath KissEngineers.json -Force
             # $i = Read-AutoTaskTimeEntries -LastxMonths $LastxMonths
-            $i | ConvertTo-Json | Out-File -FilePath  KissTimeEntries.json
-            Build-AutotaskDailyTimeStats -TimeEntries $i | ConvertTo-Json | Out-File -FilePath  KissEnginerDailies.json 
-            $Tickets | ConvertTo-Json | Out-File -FilePath  KissTickets.json 
+            $i | ConvertTo-Json | Out-File -FilePath  KissTimeEntries.json -Force
+            Build-AutotaskDailyTimeStats -TimeEntries $i | ConvertTo-Json | Out-File -FilePath  KissEnginerDailies.json -Force
+            $Tickets | ConvertTo-Json | Out-File -FilePath  KissTickets.json -Force
             #    Invoke-AutoTaskAPI -entityName 'v1.0/ResourceTimeOffBalances' | Out-File -FilePath ResourceTimeOffBalances.json
 
         }
@@ -1349,9 +1349,9 @@ function export-KissATTickets() {
     if ($path) { $path = "$path\\" }
     New-Item -ItemType Directory -Name data -ErrorAction SilentlyContinue | Out-Null
     if ($LastActionAfter -gt 0) {
-        Read-AutoTaskTickets -LastxMonths $WhereLastActionOccurWithinLastMonths | Export-csv "$($path)TicketsActioned.csv" -NoTypeInformation
+        Read-AutoTaskTickets -LastxMonths $WhereLastActionOccurWithinLastMonths | Export-csv "$($path)TicketsActioned.csv" -NoTypeInformation -Force
     }
-    Read-AutoTaskTickets -IncludeAllNonComplete | Export-csv "$($path)TicketsNotCompleted.csv" -NoTypeInformation
+    Read-AutoTaskTickets -IncludeAllNonComplete | Export-csv "$($path)TicketsNotCompleted.csv" -NoTypeInformation -Force
 
 }
 
