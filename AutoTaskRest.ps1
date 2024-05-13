@@ -669,9 +669,11 @@ function Read-PrimeEngineers() {
             Secondary = $null
         }
         if ($l.AlertText -match "secondary\s+Tech\s*[:][\s|\w]*\n") 
-        { $assignedTech.Secondary = ($Matches[0]).replace("secondary", "", 'OrdinalIgnoreCase').Replace("Tech", "", 'OrdinalIgnoreCase').replace(":", "").trim() } 
+#        { $assignedTech.Secondary = ($Matches[0]).replace("secondary", "", 'OrdinalIgnoreCase').Replace("Tech", "", 'OrdinalIgnoreCase').replace(":", "").trim() } 
+        { $assignedTech.Secondary = ($Matches[0]).replace("secondary", "").Replace("Tech", "").replace(":", "").trim() } 
         if ($l.AlertText -match "primary\s+Tech\s*[:][\s|\w]*\n") 
-        { $assignedTech.Primary = ($Matches[0]).replace("Primary", "", 'OrdinalIgnoreCase').Replace("Tech", "", 'OrdinalIgnoreCase').replace(":", "").trim() }
+#        { $assignedTech.Primary = ($Matches[0]).replace("Primary", "", 'OrdinalIgnoreCase').Replace("Tech", "", 'OrdinalIgnoreCase').replace(":", "").trim() }
+        { $assignedTech.Primary = ($Matches[0]).replace("Primary", "").Replace("Tech", "").replace(":", "").trim() }
             
         if ($assignedTech.Primary -or $assignedTech.Secondary) {
             $PrimeTechnicians += $assignedTech 
