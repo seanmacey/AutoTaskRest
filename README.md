@@ -49,4 +49,9 @@ You can include user-defined fields (UDFs) in your query. By specifying a UDF va
         }
  </code>
 
+ <h2>  Notes about QueueID  </h2>
+QueueID is a picklist in tickets (not a database table reference)
+  * 5 = Client Portal (DO NOT USE)
+  * 8 = Monitoring Alert
+
 
