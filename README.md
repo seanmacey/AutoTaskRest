@@ -1,6 +1,12 @@
 # AutoTaskRest
 A collection of PowerShell scripts, that allow time sheeting and ticket information to be extracted from Autotask
 
+once installed as Module, you can get a list of the public function you an call via
+<code>
+Test-AutoTaskConnection
+(Get-Module AutoTaskRest).ExportedFunctions
+</code>
+
 The purpose is to allow extract for analysis and reports,
   * showing the non-completed tickets, with an emphasis on normal tickets older than 7 daya , and onHold/Waiting tickets older than 30
   * showing the productivity of Staff, and comparing that against their expected working hours
