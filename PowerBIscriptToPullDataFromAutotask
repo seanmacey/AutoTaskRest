@@ -1,0 +1,34 @@
+// this script needs global parameters for API and date used to search before it will work
+// also ensure you set the autotask url to the correct site for you installation ..... https://webservices?.autotask.net
+
+let
+    Companies = let
+
+    // Common parameters
+headers = [Headers = [
+                #"ApiIntegrationCode"=ATApiIntegrationCode,
+                #"UserName"=ATuserName,
+                #"Secret"=ATSecret,
+                #"Content-Type"="application/json"]],
+
+myfunc = (aurl) =>
+    let 
+        initReq = Json.Document(Web.Contents(aurl, headers)),
+        initData = initReq[items],
+        expand = Table.FromRecords(initData),
+        pageD = initReq[pageDetails],
+        numr = Record.Field(pageD,"count"),
+        nexturl = Record.Field(pageD,"nextPageUrl")
+
+        
+    in  
+        if nexturl <>null then      
+        expand & @myfunc(nexturl)
+        else
+        expand
+in
+    myfunc("https://webservices6.autotask.net/ATServicesRest/V1.0/Companies/query?search={""IncludeFields"":[""id"", ""isActive"",""companyName"",""companyType"",""classification"",""lastActivityDate"", ""Branch""],""filter"":[{""op"":""contains"",""Field"":""companyName"",""value"":""""}]}"),
+    #"Expanded userDefinedFields" = Table.ExpandListColumn(Companies, "userDefinedFields"),
+    #"Expanded userDefinedFields1" = Table.ExpandRecordColumn(#"Expanded userDefinedFields", "userDefinedFields", {"name", "value"}, {"userDefinedFields.name", "userDefinedFields.value"})
+in
+    #"Expanded userDefinedFields1"
