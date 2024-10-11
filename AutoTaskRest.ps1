@@ -640,6 +640,7 @@ function Build-AutoTaskRMMTime() {
 }
 
 
+
 function Read-PrimeEngineers() {
     <#
     .SYNOPSIS
@@ -659,8 +660,12 @@ function Read-PrimeEngineers() {
     #>
     
     #Get prime and secondary
+    [CmdletBinding()]
+    param (
+ 
+    )
     Write-Host "Polling Autotask for Company(Client) Prime and (Secondary) Engineers"
-    $u = Invoke-AutoTaskAPI -entityName 'v1.0/CompanyAlerts' -SearchFirstBy Nothing -SearchFurtherBy "{""op"":""eq"",""Field"":""alertTypeID"",""value"":""1""},{""op"":""contains"",""Field"":""alertText"",""value"":""Tech""}" # -Verbose
+    $u = Invoke-AutoTaskAPI -entityName 'v1.0/CompanyAlerts' -SearchFirstBy Nothing -SearchFurtherBy "{""op"":""eq"",""Field"":""alertTypeID"",""value"":""1""},{""op"":""contains"",""Field"":""alertText"",""value"":""primary""}" # -Verbose
     [System.Object[]]$PrimeTechnicians = $null
     foreach ($l in $u) {
         $assignedTech = [PSCustomObject]@{
@@ -668,19 +673,40 @@ function Read-PrimeEngineers() {
             Primary   = $null
             Secondary = $null
         }
-        if ($l.AlertText -match "secondary\s+Tech\s*[:][\s|\w]*\n") 
-#        { $assignedTech.Secondary = ($Matches[0]).replace("secondary", "", 'OrdinalIgnoreCase').Replace("Tech", "", 'OrdinalIgnoreCase').replace(":", "").trim() } 
-        { $assignedTech.Secondary = ($Matches[0]).replace("secondary", "").Replace("Tech", "").replace(":", "").trim() } 
-        if ($l.AlertText -match "primary\s+Tech\s*[:][\s|\w]*\n") 
-#        { $assignedTech.Primary = ($Matches[0]).replace("Primary", "", 'OrdinalIgnoreCase').Replace("Tech", "", 'OrdinalIgnoreCase').replace(":", "").trim() }
-        { $assignedTech.Primary = ($Matches[0]).replace("Primary", "").Replace("Tech", "").replace(":", "").trim() }
-            
+        if ($l.AlertText -imatch "secondary\s+tech.*[:][\s|\w]*\n|secondary\s+engineer.*[:][\s|\w]*\n") 
+         { $assignedTech.Secondary = ($Matches[0])
+        } 
+        if (!$assignedTech.secondary){
+            if ($l.AlertText -imatch "secondary\s+tech.*[:][\s|\w]*|secondary\s+engineer.*[:][\s|\w]*")
+            {
+                $assignedTech.Secondary = ($Matches[0])
+             }
+        }
+         if ($l.AlertText -imatch "primary\s+tech.*[:][\s|\w]*\n|primary\s+engineer.*[:][\s|\w]*\n") 
+         { $assignedTech.Primary = ($Matches[0]) }
+        if (!$assignedTech.Primary){
+            if ($l.AlertText -imatch "primary\s+tech.*[:][\s|\w]*|primary\s+engineer.*[:][\s|\w]*")
+            {
+                $assignedTech.Primary = ($Matches[0])
+ 
+             }
+        }
+        $assignedTech.Primary =  $assignedTech.Primary -ireplace [regex]::Escape("primary"), ""
+        $assignedTech.Primary =  $assignedTech.Primary -ireplace [regex]::Escape("engineer"), ""
+        $assignedTech.Primary =  $assignedTech.Primary -ireplace [regex]::Escape("tech"), ""
+        $assignedTech.Primary =  $assignedTech.Primary.replace(":", "").trim()
+
+        $assignedTech.secondary =  $assignedTech.secondary -ireplace [regex]::Escape("secondary"), ""
+        $assignedTech.secondary =  $assignedTech.secondary -ireplace [regex]::Escape("engineer"), ""
+        $assignedTech.secondary =  $assignedTech.secondary -ireplace [regex]::Escape("tech"), ""
+        $assignedTech.secondary =  $assignedTech.secondary.replace(":", "").trim()
+       
+
         if ($assignedTech.Primary -or $assignedTech.Secondary) {
             $PrimeTechnicians += $assignedTech 
         }
     }
     Write-Host "DONE Polling Autotask for Company(Client) Prime and (Secondary) Engineers"
-
     return $PrimeTechnicians
 }
 
