@@ -188,6 +188,8 @@ function Invoke-AutoTaskAPI {
         'Secret'                           = $saveobj.Secret #| Convertto-SecureString #| ConvertFrom-SecureString #-AsPlainText
         'Content-Type'                     = "application/json"
     }
+    Write-verbose "secret is $($Saveobj.Secret)"
+
 
     #----- Delete line once debugging finished
     #  Write-Debug "KissATheader = $($kissATheader |ConvertTo-Json)"
