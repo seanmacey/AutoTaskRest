@@ -662,10 +662,13 @@ function Read-PrimeEngineers() {
     #Get prime and secondary
     [CmdletBinding()]
     param (
- 
+        # Parameter help description
+        [Parameter(Mandatory=$false)]
+        [int]
+        $alertTypeID = 1 #could be 1,2,3
     )
     Write-Host "Polling Autotask for Company(Client) Prime and (Secondary) Engineers"
-    $u = Invoke-AutoTaskAPI -entityName 'v1.0/CompanyAlerts' -SearchFirstBy Nothing -SearchFurtherBy "{""op"":""eq"",""Field"":""alertTypeID"",""value"":""1""},{""op"":""contains"",""Field"":""alertText"",""value"":""primary""}" # -Verbose
+    $u = Invoke-AutoTaskAPI -entityName 'v1.0/CompanyAlerts' -SearchFirstBy Nothing -SearchFurtherBy "{""op"":""eq"",""Field"":""alertTypeID"",""value"":""$alertTypeID""},{""op"":""contains"",""Field"":""alertText"",""value"":""primary""}" # -Verbose
     [System.Object[]]$PrimeTechnicians = $null
     foreach ($l in $u) {
         $assignedTech = [PSCustomObject]@{
