@@ -723,7 +723,7 @@ function Read-CompanyChildAlerts() {
     }
  
 }
-function write-CompanyPrimary() {
+function Write-AutoTaskPrimaryEngineers() {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName,ValueFromPipeline)]
