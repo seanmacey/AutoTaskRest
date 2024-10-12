@@ -887,6 +887,8 @@ function Read-AutoTaskPrimaryEngineers() {
         [switch]
         $UnassignInactiveCustomers = $false
     )
+
+
     Write-Host "Polling Autotask for Company(Client) Prime and (Secondary) Engineers"
     $u = Invoke-AutoTaskAPI -entityName 'v1.0/CompanyAlerts' -SearchFirstBy Nothing -SearchFurtherBy "{""op"":""eq"",""Field"":""alertTypeID"",""value"":""$alertTypeID""},{""op"":""contains"",""Field"":""alertText"",""value"":""primary""}" # -Verbose
     # [System.Object[]]$PrimeTechnicians = $null
@@ -900,11 +902,10 @@ function Read-AutoTaskPrimaryEngineers() {
                 Secondary             = $null
                 Branch                = ""
                 isActive              = $False
-                #  TextPrimary    = ""
-                #   TextSecondary  = ""
-                #    CompanyAlertID = $null
-                ClassificationDetails = ""
+                LastAction = ""
+                Classification = ""
             }
+            $classifications =  Read-AutoTaskCompanyClassificationIcons
         }
         else {
             $assignedTech = [PSCustomObject]@{
@@ -944,15 +945,19 @@ function Read-AutoTaskPrimaryEngineers() {
         if ($assignedTech.Primary -or $assignedTech.Secondary) {
             # we found a RECORD for primary/secondary in AutoTask
             if ($IncludeCompanyDetail) {
+               
                 $company = Read-AutoTaskCompanies -id $assignedTech.CompanyID -DontExpandChildIDFields
                 $assignedTech.Company = $company.companyName
-                $assignedTech.ClassificationDetails = $company.ClassificationDetails
+                if ($company.classification){
+                    $assignedTech.Classification = ($classifications |where-object id -eq $company.classification).name
+                }
                 $assignedTech.Branch = $company.Branch
                 $assignedTech.isActive = $company.isActive
                 if (($UnassignInactiveCustomers -eq $true) -and !($assignedTech.isActive -eq $true)) {
                     $assignedTech.Primary = ""
                     $assignedTech.Secondary = ""
                 }
+                $assignedTech.LastAction = ($company.lastActivityDate -split(" "))[0]
             }
             #$PrimeTechnicians += $assignedTech
             $assignedTech
