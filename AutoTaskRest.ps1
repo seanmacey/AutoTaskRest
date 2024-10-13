@@ -723,10 +723,91 @@ function Read-CompanyChildAlerts() {
     }
  
 }
+
+
+function Write-AutoTaskCompanies() {
+    [CmdletBinding()]
+    param (
+       
+        [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
+        [int[]]
+        [alias("ID")]
+        $CompanyID,
+        [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
+        [string]
+        [alias("Name")]
+        [alias("Company")]
+        $CompanyName,
+        [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
+        [string]
+        $Manager = "",
+        [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
+        [string]
+        $CompanyType = ""  #ClassificationIcon
+    )
+    begin {
+
+    }
+    process {
+ 
+
+ # write-host "CompanyID to process = $CompanyID"
+
+    If (!$CompanyID -and !$companyName) {return}
+        if (!$CompanyID) {
+            $CompanyID = (read-autotaskCompanies -CompanyName $CompanyName -exactNameMatch -DontExpandChildIDFields).id
+        }
+
+        foreach ($anID in $CompanyID) {
+            write-host "CompanyID to process = $anID"
+            Write-Verbose "About to update information in Company $anID"
+<#
+                if ($alert) {
+
+                    $alert.alertText = $alert.alertText -replace '^(\n)*', "" #-replace "^(`n",""
+                    if ($alert.alertText) {
+                        $json = $alert | ConvertTo-Json 
+                        write-verbose "write-CompanyPrimary alertTypeID:$x Updating Primary for $anID"
+                      #  Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts') -Method PUT -Body $json | Out-Null
+                    }
+                    elseif ($alert.id) {
+                        #there is no needed alertText, so DELETE the alert
+                        write-verbose "write-CompanyPrimary alertTypeID:$x Deleting Primary for $anID"
+                       # Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts/' + $alert.id) -Method DELETE  | Out-Null
+                    }
+
+                }
+                else {
+                    if (($Primary -or $Secondary) -and ($x -ne 2)) {
+                        Write-Verbose "write-CompanyPrimary alertTypeID:$x creating a NEW alert record"
+                        $alert = [PSCustomObject]@{
+                            alertText   = "Primary Engineer: $primary`nSecondary Engineer:$secondary"
+                            alertTypeID = $x
+                            companyID   = $anID
+                        } 
+                        $json = $alert | ConvertTo-Json
+                      #  Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts') -Method POST -Body $json | Out-Null
+                    }
+                }
+                    #>
+            
+        }
+
+    }
+    
+        end {
+
+        }
+
+
+
+    }
+
+
 function Write-AutoTaskPrimaryEngineers() {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName,ValueFromPipeline)]
+        [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
         [int[]]
         [alias("ID")]
         $CompanyID,
@@ -749,9 +830,9 @@ function Write-AutoTaskPrimaryEngineers() {
     }
     process {
 
-
+If (!$CompanyID -and !$companyName) {return}
         if (!$CompanyID) {
-            $CompanyID = (read-autotaskCompanies -CompanyName "matamata medical centre" -exactNameMatch -DontExpandChildIDFields).id
+            $CompanyID = (read-autotaskCompanies -CompanyName $CompanyName -exactNameMatch -DontExpandChildIDFields).id
         }
 
         foreach ($anID in $CompanyID) {
