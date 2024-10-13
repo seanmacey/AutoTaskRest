@@ -10,6 +10,44 @@ $global:kissATAPIfile = 'kissAtapilogin.json'
 #GET vs READ for extract
 #Measure vs Build
 #invoke
+function Invoke-AutoTaskAPIREST() {
+    [CmdletBinding()]
+    param (
+        [Parameter(ParameterSetName = 'raw', Mandatory = $true)]
+        [string]
+        $url,
+        [Parameter( Mandatory = $false)]
+        [string]
+        $Body,
+        [Parameter( Mandatory = $true )]
+        [ValidateSet("PUT", "GET", "POST", "DELETE")]
+        [string]
+        $Method
+    )
+    $jsn = Get-Content "$kissATAPIpath\$kissATAPIfile"
+    if ($jsn) { $saveobj = $jsn | ConvertFrom-Json }
+    if ($saveobj.url -and $saveobj.secret -and $saveobj.username -and $saveobj.atapi) {
+        #saved data exists and is valid , so import it
+        $saveobj.secret = $saveobj.Secret | Convertto-SecureString
+        $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($($saveobj.secret))
+        $saveobj.Secret = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+        #  [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) 
+        write-debug "Invoke-AutoTaskAPIPut: url is $($saveobj.url)"
+
+        $kissATheader = @{'ApiIntegrationCode' = $saveobj.atapi #| Convertto-SecureString | ConvertFrom-SecureString -AsPlainText
+            'UserName'                         = $saveobj.UserName
+            'Secret'                           = $saveobj.Secret #| Convertto-SecureString #| ConvertFrom-SecureString #-AsPlainText
+            'Content-Type'                     = "application/json"
+        }
+
+    }
+    $url2 = "$($saveobj.url)$Url"
+    write-verbose "Invoke-AutoTaskAPIREST $Method $url2 `r`n BODY $body"
+    $result = Invoke-RestMethod -Method $Method -Uri $url2  -Headers $kissATheader -Body $Body
+    write-verbose "Invoke-AutoTaskAPIREST resultitem = $($result.itemid)"
+    $result
+
+}
 
 function Invoke-AutoTaskAPI {
     <#
@@ -190,7 +228,8 @@ function Invoke-AutoTaskAPI {
         'Secret'                           = $saveobj.Secret #| Convertto-SecureString #| ConvertFrom-SecureString #-AsPlainText
         'Content-Type'                     = "application/json"
     }
-    #/swagger/ui/index
+    # Write-verbose "secret is $($Saveobj.Secret)"
+
 
     #----- Delete line once debugging finished
     #  Write-Debug "KissATheader = $($kissATheader |ConvertTo-Json)"
@@ -205,9 +244,7 @@ function Invoke-AutoTaskAPI {
     if ($urlFixedSuffix) {
         $url2 = "$($saveobj.url)$UrlFixedSuffix"
         Write-Verbose "Invoke-AutoTaskAPI get Raw data based on $url2"
-        Invoke-RestMethod -Method Get -Uri $url2  -Headers $kissATheader  #-SkipHeaderValidation
-        Write-Debug "url: $url2 <br> headers: $kissATheader"
-
+        Invoke-RestMethod -Method Get -Uri $url2  -Headers $kissATheader    #-SkipHeaderValidation 
         return
 
 
@@ -223,7 +260,7 @@ function Invoke-AutoTaskAPI {
 
         Write-Verbose "Invoke-AutoTaskAPI item count=$($result.item.count)"
         if ($ReturnRaw -eq $true) {
-            write-host "Invoke-AutoTaskAPI Returning raw data, and not an object collection "
+            write-host "Invoke-AutoTaskAPI Returning raw data, and not an object collection - this WILL include userDefinedFields"
             return $result
         }
         return $Result.Item
@@ -415,7 +452,12 @@ function Read-AutoTaskCompanies {
         # Parameter help description
         #[Parameter(AttributeValues)]
         [switch]
-        $GetEngineers = $false
+        $GetEngineers = $false,
+        # Parameter help description
+        [Parameter(Mandatory = $false)]
+        [switch]
+        $DontExpandChildIDFields = $false
+
     )
 
  
@@ -424,16 +466,19 @@ function Read-AutoTaskCompanies {
     switch ($true) {
         { $id -ge 0 } {
             write-host "Read-AUtoTaskCompanies - for a single ID $id"
-            $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -id $id ; break 
+            $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -id $id #; break 
+            break
         }
         { $CompanyName } {
             write-host "Read-AUtoTaskCompanies - for a exact match :$companyName"
             [string]$srch = "{""op"":""$op"",""Field"":""companyName"",""value"":""$companyName""}"  #{"op":"contains","Field":"companyName","value":"imatec"}
-            $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -includeFields $includeFields -SearchFirstBy Nothing  -SearchFurtherBy $srch; break 
+            $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -includeFields $includeFields -SearchFirstBy Nothing  -SearchFurtherBy $srch
+            break 
         }
         { $includeInactive -eq $true } { 
             write-host "Read-AUtoTaskCompanies - for ALL companies including inactive"
-            $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -includeFields $includeFields -SearchFirstBy id ; break 
+            $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -includeFields $includeFields -SearchFirstBy id 
+            break 
         }
         default {
             write-host "Read-AUtoTaskCompanies - for ALL Active companies"
@@ -442,41 +487,47 @@ function Read-AutoTaskCompanies {
     }
 
     if ($rc) {
-        Convert-ObjArrayDateTimesToSearchableStrings -obj $rc #|Out-Null
+        $branch = $rc.userDefinedFields | Where-Object { $_.name -eq "Branch" }
+        $rc = $rc | select-Object -Property * , @{name = "Branch"; e = { $branch.value } } -ErrorAction SilentlyContinue | Select-Object -ExcludeProperty userDefinedFields
+        if (!($DontExpandChildIDFields -eq $true)) {
 
+            
+            Convert-ObjArrayDateTimesToSearchableStrings -obj $rc #|Out-Null
 
-        $rc = $rc | select-Object -Property * , @{name = "Branch"; e = { $_.userDefinedFields[0].value } } -ErrorAction SilentlyContinue | Select-Object -ExcludeProperty userDefinedFields
-        #$rc = $rc | Select-Object -ExcludeProperty userDefinedFields
+            #$rc.userDefinedFields
+            #$rc = $rc | Select-Object -ExcludeProperty userDefinedFields
 
-        if ($GetEngineers) {
-            $rc | Add-Member -NotePropertyName Primary -NotePropertyValue ""
-            $rc | Add-Member -NotePropertyName Secondary -NotePropertyValue ""
-            $AllPrimeTechnicians = Read-PrimeEngineers
-            # this updates the objects in $array1
-            foreach ($i in $rc) {
-                $thisprime = $AllPrimeTechnicians | Where-Object CompanyID -eq $i.id | Select-Object -First 1
-                if ($thisprime) {
-                    $i.primary = $thisprime.primary
-                    $i.secondary = $thisprime.secondary
+            if ($GetEngineers) {
+                $rc | Add-Member -NotePropertyName Primary -NotePropertyValue ""
+                $rc | Add-Member -NotePropertyName Secondary -NotePropertyValue ""
+                $AllPrimeTechnicians = Read-AutotaskPrimaryEngineers
+                # this updates the objects in $array1
+                foreach ($i in $rc) {
+                    $thisprime = $AllPrimeTechnicians | Where-Object CompanyID -eq $i.id | Select-Object -First 1
+                    if ($thisprime) {
+                        $i.primary = $thisprime.primary
+                        $i.secondary = $thisprime.secondary
+                    }
                 }
             }
-        }
-
-        # get special comments about company
-        $classificationIcons = Read-AutoTaskCompanyClassificationIcons
-        $rc | Add-Member -NotePropertyName 'ClassificationDetails' -NotePropertyValue "" -Force
-        if ($classificationIcons) {
-            $CompanyGroups = $rc | Where-Object classification | Group-Object classification
+            
+            # get special comments about company including whether Residential or commercial
+            $classificationIcons = Read-AutoTaskCompanyClassificationIcons
+            $rc | Add-Member -NotePropertyName 'ClassificationDetails' -NotePropertyValue "" -Force
+            if ($classificationIcons) {
+                $CompanyGroups = $rc | Where-Object classification | Group-Object classification
     
-            foreach ($item in $CompanyGroups ) {
-                if ($item.name) {
-                    $classificationDetail = ($classificationIcons | Where-Object id -eq ($item.name)).description
-                    $item.group | Add-Member -NotePropertyName 'ClassificationDetails' -NotePropertyValue "$classificationDetail" -Force
-                }
+                foreach ($item in $CompanyGroups ) {
+                    if ($item.name) {
+                        $classificationDetail = ($classificationIcons | Where-Object id -eq ($item.name)).description
+                        $item.group | Add-Member -NotePropertyName 'ClassificationDetails' -NotePropertyValue "$classificationDetail" -Force
+                    }
 
+                }
             }
         }
-        write-host "Done Read-AUtoTaskCompanies" -foregroundColor Green
+        write-verbose "Done Read-AutoTaskCompanies" #-foregroundColor Green
+
         return $rc
     }
 }
@@ -506,8 +557,6 @@ function Build-AutoTaskInternalTicketsTime() {
         # return $Item.group
     }
   
-
-
 
     # identify any internal tickets
     $timeEntries | Add-Member -NotePropertyName 'InternalTicketBillableNormalHrs' -NotePropertyValue 0.0 -Force
@@ -647,8 +696,250 @@ function Build-AutoTaskRMMTime() {
     return $timeEntries
 }
 
+function Read-CompanyAlert() {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $false)]
+        [int]
+        $AlertTypeID = 1,
+        [Parameter(Mandatory = $true)]
+        [string]
+        $CompanyID
 
-function Read-PrimeEngineers() {
+    )
+    Write-Host "Polling Autotask for CompanyID $CompanyID and AlertTypeID $AlertTypeID  "
+    $u = Invoke-AutoTaskAPI -entityName 'v1.0/CompanyAlerts' -SearchFirstBy Nothing -SearchFurtherBy "{""op"":""eq"",""Field"":""alertTypeID"",""value"":""$AlertTypeID""},{""op"":""eq"",""Field"":""CompanyID"",""value"":""$CompanyID""}" # -Verbose
+    if ($u) {
+        $u[0].alertText
+    }
+}
+
+function Read-CompanyChildAlerts() {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [int]
+        $CompanyID
+    )
+    Write-Host "Polling Autotask for CompanyID $CompanyID for all its alerts"
+    $u = Invoke-AutoTaskAPI  -UrlFixedSuffix "v1.0/Companies/$CompanyID/Alerts" 
+    if ($u) {
+        $u.items
+    }
+ 
+}
+
+
+function Write-AutoTaskCompanies() {
+    [CmdletBinding()]
+    param (
+       
+        [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
+        [int[]]
+        [alias("ID")]
+        $CompanyID,
+        [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
+        [string]
+        [alias("Name")]
+        [alias("Company")]
+        $CompanyName,
+        [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
+        [string]
+        $Manager = "",
+        [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
+        [string]
+        $CompanyType = ""  #ClassificationIcon
+    )
+    begin {
+
+    }
+    process {
+ 
+
+ # write-host "CompanyID to process = $CompanyID"
+
+    If (!$CompanyID -and !$companyName) {return}
+        if (!$CompanyID) {
+            $CompanyID = (read-autotaskCompanies -CompanyName $CompanyName -exactNameMatch -DontExpandChildIDFields).id
+        }
+
+        foreach ($anID in $CompanyID) {
+            write-host "CompanyID to process = $anID"
+            Write-Verbose "About to update information in Company $anID"
+<#
+                if ($alert) {
+
+                    $alert.alertText = $alert.alertText -replace '^(\n)*', "" #-replace "^(`n",""
+                    if ($alert.alertText) {
+                        $json = $alert | ConvertTo-Json 
+                        write-verbose "write-CompanyPrimary alertTypeID:$x Updating Primary for $anID"
+                      #  Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts') -Method PUT -Body $json | Out-Null
+                    }
+                    elseif ($alert.id) {
+                        #there is no needed alertText, so DELETE the alert
+                        write-verbose "write-CompanyPrimary alertTypeID:$x Deleting Primary for $anID"
+                       # Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts/' + $alert.id) -Method DELETE  | Out-Null
+                    }
+
+                }
+                else {
+                    if (($Primary -or $Secondary) -and ($x -ne 2)) {
+                        Write-Verbose "write-CompanyPrimary alertTypeID:$x creating a NEW alert record"
+                        $alert = [PSCustomObject]@{
+                            alertText   = "Primary Engineer: $primary`nSecondary Engineer:$secondary"
+                            alertTypeID = $x
+                            companyID   = $anID
+                        } 
+                        $json = $alert | ConvertTo-Json
+                      #  Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts') -Method POST -Body $json | Out-Null
+                    }
+                }
+                    #>
+            
+        }
+
+    }
+    
+        end {
+
+        }
+
+
+
+    }
+
+
+function Write-AutoTaskPrimaryEngineers() {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
+        [int[]]
+        [alias("ID")]
+        $CompanyID,
+        [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
+        [string]
+        [alias("Name")]
+        [alias("Company")]
+        $CompanyName,
+        [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
+        [string]
+        $Primary = "",
+        [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
+        [string]
+        $Secondary = ""
+
+
+    )
+    begin {
+
+    }
+    process {
+
+If (!$CompanyID -and !$companyName) {return}
+        if (!$CompanyID) {
+            $CompanyID = (read-autotaskCompanies -CompanyName $CompanyName -exactNameMatch -DontExpandChildIDFields).id
+        }
+
+        foreach ($anID in $CompanyID) {
+            write-host "CompanyID to process = $anID"
+
+
+            $ChildAlerts = Read-CompanyChildAlerts -CompanyID $anID
+            $x = 1
+            $a = @(1,2, 3)
+            foreach ($x in $a) {
+                $alert = $ChildAlerts | Where-Object alertTypeID -eq $x
+
+
+
+                if ($alert) {
+                    #Write-Verbose "write-CompanyPrimary alertTypeID:$x updating an existing alert record"
+
+                    #must PUT
+                    $json = $alert | ConvertTo-Json    
+                    Write-Verbose  "write-CompanyPrimary alertTypeID:$x  initial data exists company $anID and alertType $x and =  $json"
+                    $assignedTech = [PSCustomObject]@{
+                        CompanyID      = $anID
+                        Primary        = $null
+                        Secondary      = $null
+                        TextPrimary    = ""
+                        TextSecondary  = ""
+                        CompanyAlertID = $null
+                    }
+                    if ($alert.AlertText -imatch "secondary\s+tech.*[:][\s|\w]*\n|secondary\s+engineer.*[:][\s|\w]*\n|secondary\s+tech.*[:][\s|\w]*|secondary\s+engineer.*[:][\s|\w]*") {
+                        $assignedTech.TextSecondary = ($Matches[0]) -replace ("\n", "")
+                        $assignedTech.CompanyAlertID = $l.ID
+                        $assignedTech.secondary = $assignedTech.Textsecondary -ireplace [regex]::Escape("secondary"), ""
+                        $assignedTech.secondary = $assignedTech.secondary -ireplace [regex]::Escape("engineer"), ""
+                        $assignedTech.secondary = $assignedTech.secondary -ireplace [regex]::Escape("tech"), ""
+                        $assignedTech.secondary = $assignedTech.secondary.replace(":", "").trim()
+                    } 
+
+                    if ($alert.AlertText -imatch "primary\s+tech.*[:][\s|\w]*\n|primary\s+engineer.*[:][\s|\w]*\n|primary\s+tech.*[:][\s|\w]*|primary\s+engineer.*[:][\s|\w]*") {
+                        $assignedTech.TextPrimary = ($Matches[0]) -replace ("\n", "") 
+                        $assignedTech.CompanyAlertID = $anID
+                        $assignedTech.Primary = $assignedTech.TextPrimary -ireplace [regex]::Escape("primary"), ""
+                        $assignedTech.Primary = $assignedTech.Primary -ireplace [regex]::Escape("engineer"), ""
+                        $assignedTech.Primary = $assignedTech.Primary -ireplace [regex]::Escape("tech"), ""
+                        $assignedTech.Primary = $assignedTech.Primary.replace(":", "").trim()
+
+                    }
+                    $atemp = $alert.alertText -replace ($assignedTech.TextPrimary, "") -replace ($assignedTech.TextSecondary, "").Trim() -replace '^(\n)*', ""
+                    #if ($atemp) {$atemp = $atemp -replace '^(\n)*',""}
+                    $alert.alertText = ""
+                    if ($primary -and ($x -ne 2)) {
+                        $alert.alertText = "Primary Engineer: $primary`n"
+                    }
+                    if ($secondary -and ($x -ne 2)) {
+                        $alert.alertText = $alert.alertText + "Secondary Engineer: $secondary"
+                    }
+
+
+                    if ($atemp) {
+                        Write-Verbose "write-companyPrimary: alerttypeid:$x found extra text $atemp"
+                        $alert.alertText = $alert.alertText.trim() + "`n" + "$atemp"
+                    }
+                    $alert.alertText = $alert.alertText -replace '^(\n)*', "" #-replace "^(`n",""
+                    if ($alert.alertText) {
+                        $json = $alert | ConvertTo-Json 
+                        write-verbose "write-CompanyPrimary alertTypeID:$x Updating Primary for $anID"
+                        Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts') -Method PUT -Body $json | Out-Null
+                    }
+                    elseif ($alert.id) {
+                        #there is no needed alertText, so DELETE the alert
+                        write-verbose "write-CompanyPrimary alertTypeID:$x Deleting Primary for $anID"
+                        Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts/' + $alert.id) -Method DELETE  | Out-Null
+                    }
+
+                }
+                else {
+                    if (($Primary -or $Secondary) -and ($x -ne 2)) {
+                        Write-Verbose "write-CompanyPrimary alertTypeID:$x creating a NEW alert record"
+                        $alert = [PSCustomObject]@{
+                            alertText   = "Primary Engineer: $primary`nSecondary Engineer:$secondary"
+                            alertTypeID = $x
+                            companyID   = $anID
+                        } 
+                        $json = $alert | ConvertTo-Json
+                        Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts') -Method POST -Body $json | Out-Null
+                    }
+                }
+            }
+        }
+
+    }
+
+        end {
+
+        }
+
+
+    # $json = $alert | ConvertTo-Json    
+    # Write-Host "$json"
+    # $assignedTech
+}
+
+function Read-AutoTaskPrimaryEngineers() {
     <#
     .SYNOPSIS
     get  primary and secondary technician assignments to Customers
@@ -670,54 +961,96 @@ function Read-PrimeEngineers() {
     [CmdletBinding()]
     param (
         # Parameter help description
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory = $false)]
         [int]
-        $alertTypeID = 1 #could be 1,2,3
+        $alertTypeID = 1, #could be 1,2,3
+        # Parameter help description
+        [Parameter(Mandatory = $false)]
+        [switch]
+        $IncludeCompanyDetail = $false,
+        # Parameter help description
+        [Parameter(Mandatory = $false)]
+        [switch]
+        $UnassignInactiveCustomers = $false
     )
+
+
     Write-Host "Polling Autotask for Company(Client) Prime and (Secondary) Engineers"
     $u = Invoke-AutoTaskAPI -entityName 'v1.0/CompanyAlerts' -SearchFirstBy Nothing -SearchFurtherBy "{""op"":""eq"",""Field"":""alertTypeID"",""value"":""$alertTypeID""},{""op"":""contains"",""Field"":""alertText"",""value"":""primary""}" # -Verbose
-    [System.Object[]]$PrimeTechnicians = $null
+    # [System.Object[]]$PrimeTechnicians = $null
+    if ($UnassignInactiveCustomers -eq $true) { $IncludeCompanyDetail = $true }
     foreach ($l in $u) {
-        $assignedTech = [PSCustomObject]@{
-            CompanyID = $l.CompanyID
-            Primary   = $null
-            Secondary = $null
+        if ($IncludeCompanyDetail -eq $true) {
+            $assignedTech = [PSCustomObject]@{
+                CompanyID             = $l.CompanyID
+                Company               = ""
+                Primary               = $null
+                Secondary             = $null
+                Branch                = ""
+                isActive              = $False
+                LastAction = ""
+                Classification = ""
+            }
+            $classifications =  Read-AutoTaskCompanyClassificationIcons
         }
-        if ($l.AlertText -imatch "secondary\s+tech.*[:][\s|\w]*\n|secondary\s+engineer.*[:][\s|\w]*\n") 
-         { $assignedTech.Secondary = ($Matches[0])
-        } 
-        if (!$assignedTech.secondary){
-            if ($l.AlertText -imatch "secondary\s+tech.*[:][\s|\w]*|secondary\s+engineer.*[:][\s|\w]*")
-            {
-                $assignedTech.Secondary = ($Matches[0])
-             }
+        else {
+            $assignedTech = [PSCustomObject]@{
+                CompanyID = $l.CompanyID
+                Primary   = $null
+                Secondary = $null
+                # TextPrimary    = ""
+                # TextSecondary  = ""
+                # CompanyAlertID = $null
+            }
         }
-         if ($l.AlertText -imatch "primary\s+tech.*[:][\s|\w]*\n|primary\s+engineer.*[:][\s|\w]*\n") 
-         { $assignedTech.Primary = ($Matches[0]) }
-        if (!$assignedTech.Primary){
-            if ($l.AlertText -imatch "primary\s+tech.*[:][\s|\w]*|primary\s+engineer.*[:][\s|\w]*")
-            {
-                $assignedTech.Primary = ($Matches[0])
- 
-             }
-        }
-        $assignedTech.Primary =  $assignedTech.Primary -ireplace [regex]::Escape("primary"), ""
-        $assignedTech.Primary =  $assignedTech.Primary -ireplace [regex]::Escape("engineer"), ""
-        $assignedTech.Primary =  $assignedTech.Primary -ireplace [regex]::Escape("tech"), ""
-        $assignedTech.Primary =  $assignedTech.Primary.replace(":", "").trim()
 
-        $assignedTech.secondary =  $assignedTech.secondary -ireplace [regex]::Escape("secondary"), ""
-        $assignedTech.secondary =  $assignedTech.secondary -ireplace [regex]::Escape("engineer"), ""
-        $assignedTech.secondary =  $assignedTech.secondary -ireplace [regex]::Escape("tech"), ""
-        $assignedTech.secondary =  $assignedTech.secondary.replace(":", "").trim()
+        if ($l.AlertText -imatch "secondary\s+tech.*[:][\s|\w]*\n|secondary\s+engineer.*[:][\s|\w]*\n|secondary\s+tech.*[:][\s|\w]*|secondary\s+engineer.*[:][\s|\w]*") {
+            $assignedTech.secondary = ($Matches[0]) -replace ("\n", "")
+            #$assignedTech.CompanyAlertID = $l.ID
+            $assignedTech.secondary = $assignedTech.secondary -ireplace [regex]::Escape("secondary"), ""
+            $assignedTech.secondary = $assignedTech.secondary -ireplace [regex]::Escape("engineer"), ""
+            $assignedTech.secondary = $assignedTech.secondary -ireplace [regex]::Escape("tech"), ""
+            $assignedTech.secondary = $assignedTech.secondary.replace(":", "").trim()
+        } 
+
+        if ($l.AlertText -imatch "primary\s+tech.*[:][\s|\w]*\n|primary\s+engineer.*[:][\s|\w]*\n|primary\s+tech.*[:][\s|\w]*|primary\s+engineer.*[:][\s|\w]*") {
+            $assignedTech.Primary = ($Matches[0]) -replace ("\n", "") 
+            #$assignedTech.CompanyAlertID = $l.ID
+            $assignedTech.Primary = $assignedTech.Primary -ireplace [regex]::Escape("primary"), ""
+            $assignedTech.Primary = $assignedTech.Primary -ireplace [regex]::Escape("engineer"), ""
+            $assignedTech.Primary = $assignedTech.Primary -ireplace [regex]::Escape("tech"), ""
+            $assignedTech.Primary = $assignedTech.Primary.replace(":", "").trim()
+
+        }
+
+
+
+
        
 
         if ($assignedTech.Primary -or $assignedTech.Secondary) {
-            $PrimeTechnicians += $assignedTech 
+            # we found a RECORD for primary/secondary in AutoTask
+            if ($IncludeCompanyDetail) {
+               
+                $company = Read-AutoTaskCompanies -id $assignedTech.CompanyID -DontExpandChildIDFields
+                $assignedTech.Company = $company.companyName
+                if ($company.classification){
+                    $assignedTech.Classification = ($classifications |where-object id -eq $company.classification).name
+                }
+                $assignedTech.Branch = $company.Branch
+                $assignedTech.isActive = $company.isActive
+                if (($UnassignInactiveCustomers -eq $true) -and !($assignedTech.isActive -eq $true)) {
+                    $assignedTech.Primary = ""
+                    $assignedTech.Secondary = ""
+                }
+                $assignedTech.LastAction = ($company.lastActivityDate -split(" "))[0]
+            }
+            #$PrimeTechnicians += $assignedTech
+            $assignedTech
         }
     }
     Write-Host "DONE Polling Autotask for Company(Client) Prime and (Secondary) Engineers"
-    return $PrimeTechnicians
+    # return $PrimeTechnicians
 }
 
 
@@ -1539,19 +1872,19 @@ function Set-loginAutotask() {
     #     default {}
     # }
 
-   $testresult = Test-AutoTaskConnection -LoginInfo $saveobj
-   $testresult
-   if ($testresult) {
-    write-Host "Set-LoginAutotask:Saving the entered Login becasue the test connection was successfull"
-   }
-   elseif ($force -eq $true){
-    write-Host "Set-LoginAutotask: even though this login did not work, we are saving it because the FORCE paramater was used"
-   }
-   else {
-    write-Host "Set-LoginAutotask: Not saving a thing, becasue the login didn't work"
-    return
-   }
-   write-host "setcontent on  $kissATAPIpath\$kissATAPIfile   value $jsn2"
+    $testresult = Test-AutoTaskConnection -LoginInfo $saveobj
+    $testresult
+    if ($testresult) {
+        write-Host "Set-LoginAutotask:Saving the entered Login becasue the test connection was successfull"
+    }
+    elseif ($force -eq $true) {
+        write-Host "Set-LoginAutotask: even though this login did not work, we are saving it because the FORCE paramater was used"
+    }
+    else {
+        write-Host "Set-LoginAutotask: Not saving a thing, becasue the login didn't work"
+        return
+    }
+    write-host "setcontent on  $kissATAPIpath\$kissATAPIfile   value $jsn2"
     Set-Content "$kissATAPIpath\$kissATAPIfile" -Value $jsn2
 
 }
@@ -1576,7 +1909,7 @@ function Test-AutoTaskConnection {
             $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Plainpassword) 
             $r.Secret = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
             [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)   
-          #  write-verbose "the login that will be tested is  = $($r |ConvertTo-Json)"    
+            #  write-verbose "the login that will be tested is  = $($r |ConvertTo-Json)"    
         }
     }
 
