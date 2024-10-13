@@ -155,7 +155,9 @@ function Invoke-AutoTaskAPI {
             $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($($saveobj.secret))
             $saveobj.Secret = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
             #  [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) 
-            write-debug "Invoke-AutoTask: url is $($saveobj.url)"
+            write-debug "Invoke-AutoTask: secret is $($saveobj.Secret)"
+            write-debug "Invoke-AutoTask: userName is $($saveobj.username)"
+            write-debug "Invoke-AutoTask: ApiIntegrationCode is $($saveobj.atapi)"
  
         }
     }
@@ -188,6 +190,7 @@ function Invoke-AutoTaskAPI {
         'Secret'                           = $saveobj.Secret #| Convertto-SecureString #| ConvertFrom-SecureString #-AsPlainText
         'Content-Type'                     = "application/json"
     }
+    #/swagger/ui/index
 
     #----- Delete line once debugging finished
     #  Write-Debug "KissATheader = $($kissATheader |ConvertTo-Json)"
@@ -196,12 +199,15 @@ function Invoke-AutoTaskAPI {
     if ($url -and ($returnRaw -eq $true)) {
         Write-Verbose "Invoke-AutoTaskAPI get RAw data based on $url"
         Invoke-RestMethod -Method Get -Uri $url  -Headers $kissATheader  #-SkipHeaderValidation
+        Write-Debug "url: $url <br> headers: $kissATheader"
         return
     }
     if ($urlFixedSuffix) {
         $url2 = "$($saveobj.url)$UrlFixedSuffix"
         Write-Verbose "Invoke-AutoTaskAPI get Raw data based on $url2"
         Invoke-RestMethod -Method Get -Uri $url2  -Headers $kissATheader  #-SkipHeaderValidation
+        Write-Debug "url: $url2 <br> headers: $kissATheader"
+
         return
 
 
@@ -213,6 +219,8 @@ function Invoke-AutoTaskAPI {
         $url2 = "$($saveobj.url)$entityName/$ID"
         Write-Verbose "Invoke-AutoTaskAPI getiing just one $entityname item $id : $url2"
         $Result = Invoke-RestMethod -Method Get -Uri $url2  -Headers $kissATheader  #-SkipHeaderValidation #-FollowRelLink
+        Write-Debug "url: $url2 <br> headers: $kissATheader"
+
         Write-Verbose "Invoke-AutoTaskAPI item count=$($result.item.count)"
         if ($ReturnRaw -eq $true) {
             write-host "Invoke-AutoTaskAPI Returning raw data, and not an object collection "
@@ -258,7 +266,7 @@ function Invoke-AutoTaskAPI {
     }
     else { $url2 = $url }
     
-    Write-verbose "getiing  $entityname items  $url2"
+    Write-verbose "getting  $entityname items  $url2"
     $Result = Invoke-RestMethod -Method Get -Uri $url2  -Headers $kissATheader  #-SkipHeaderValidation
     $apidata = $Result.items
     
@@ -659,8 +667,15 @@ function Read-PrimeEngineers() {
     #>
     
     #Get prime and secondary
+    [CmdletBinding()]
+    param (
+        # Parameter help description
+        [Parameter(Mandatory=$false)]
+        [int]
+        $alertTypeID = 1 #could be 1,2,3
+    )
     Write-Host "Polling Autotask for Company(Client) Prime and (Secondary) Engineers"
-    $u = Invoke-AutoTaskAPI -entityName 'v1.0/CompanyAlerts' -SearchFirstBy Nothing -SearchFurtherBy "{""op"":""eq"",""Field"":""alertTypeID"",""value"":""1""},{""op"":""contains"",""Field"":""alertText"",""value"":""Tech""}" # -Verbose
+    $u = Invoke-AutoTaskAPI -entityName 'v1.0/CompanyAlerts' -SearchFirstBy Nothing -SearchFurtherBy "{""op"":""eq"",""Field"":""alertTypeID"",""value"":""$alertTypeID""},{""op"":""contains"",""Field"":""alertText"",""value"":""primary""}" # -Verbose
     [System.Object[]]$PrimeTechnicians = $null
     foreach ($l in $u) {
         $assignedTech = [PSCustomObject]@{
@@ -668,19 +683,40 @@ function Read-PrimeEngineers() {
             Primary   = $null
             Secondary = $null
         }
-        if ($l.AlertText -match "secondary\s+Tech\s*[:][\s|\w]*\n") 
-#        { $assignedTech.Secondary = ($Matches[0]).replace("secondary", "", 'OrdinalIgnoreCase').Replace("Tech", "", 'OrdinalIgnoreCase').replace(":", "").trim() } 
-        { $assignedTech.Secondary = ($Matches[0]).replace("secondary", "").Replace("Tech", "").replace(":", "").trim() } 
-        if ($l.AlertText -match "primary\s+Tech\s*[:][\s|\w]*\n") 
-#        { $assignedTech.Primary = ($Matches[0]).replace("Primary", "", 'OrdinalIgnoreCase').Replace("Tech", "", 'OrdinalIgnoreCase').replace(":", "").trim() }
-        { $assignedTech.Primary = ($Matches[0]).replace("Primary", "").Replace("Tech", "").replace(":", "").trim() }
-            
+        if ($l.AlertText -imatch "secondary\s+tech.*[:][\s|\w]*\n|secondary\s+engineer.*[:][\s|\w]*\n") 
+         { $assignedTech.Secondary = ($Matches[0])
+        } 
+        if (!$assignedTech.secondary){
+            if ($l.AlertText -imatch "secondary\s+tech.*[:][\s|\w]*|secondary\s+engineer.*[:][\s|\w]*")
+            {
+                $assignedTech.Secondary = ($Matches[0])
+             }
+        }
+         if ($l.AlertText -imatch "primary\s+tech.*[:][\s|\w]*\n|primary\s+engineer.*[:][\s|\w]*\n") 
+         { $assignedTech.Primary = ($Matches[0]) }
+        if (!$assignedTech.Primary){
+            if ($l.AlertText -imatch "primary\s+tech.*[:][\s|\w]*|primary\s+engineer.*[:][\s|\w]*")
+            {
+                $assignedTech.Primary = ($Matches[0])
+ 
+             }
+        }
+        $assignedTech.Primary =  $assignedTech.Primary -ireplace [regex]::Escape("primary"), ""
+        $assignedTech.Primary =  $assignedTech.Primary -ireplace [regex]::Escape("engineer"), ""
+        $assignedTech.Primary =  $assignedTech.Primary -ireplace [regex]::Escape("tech"), ""
+        $assignedTech.Primary =  $assignedTech.Primary.replace(":", "").trim()
+
+        $assignedTech.secondary =  $assignedTech.secondary -ireplace [regex]::Escape("secondary"), ""
+        $assignedTech.secondary =  $assignedTech.secondary -ireplace [regex]::Escape("engineer"), ""
+        $assignedTech.secondary =  $assignedTech.secondary -ireplace [regex]::Escape("tech"), ""
+        $assignedTech.secondary =  $assignedTech.secondary.replace(":", "").trim()
+       
+
         if ($assignedTech.Primary -or $assignedTech.Secondary) {
             $PrimeTechnicians += $assignedTech 
         }
     }
     Write-Host "DONE Polling Autotask for Company(Client) Prime and (Secondary) Engineers"
-
     return $PrimeTechnicians
 }
 
@@ -727,10 +763,12 @@ function Read-AutoTaskEngineers() {
         $IncludeFields = ('"{0}"' -f ($includeFields -join '","')).replace('""', '"')
     }
 
+
+
     $result = Invoke-AutoTaskAPI -entityName 'v1.0/Resources' -includeFields $includeFields -SearchFurtherBy '{"op":"noteq","Field":"userType","value":"17"}'  -isActive:$isActive
     
     # $result | Add-Member -NotePropertyName dailyHrs -NotePropertyValue $DeafultDailyHrs
-    $DailyAvialabilities = Invoke-AutoTaskAPI -entityName 'v1.0/ResourceDailyAvailabilities'
+    $DailyAvialabilities = Invoke-AutoTaskAAPI -entityName 'v1.0/ResourceDailyAvailabilities'
 
     foreach ($Resource in $result) {
         $item = $DailyAvialabilities | Where-Object resourceID -eq $Resource.ID | Select-Object -First 1
@@ -750,6 +788,18 @@ function Read-AutoTaskEngineers() {
     return $result
 }
 
+
+function Read-AutotaskQueues(){
+    [CmdletBinding()]
+    param (
+        # [Parameter()]
+        # [TypeName]
+        # $ParameterName
+    )
+
+    $result = Invoke-AutoTaskAPI -entityName 'v1.0/Resources' #-includeFields $includeFields -SearchFurtherBy '{"op":"noteq","Field":"userType","value":"17"}'  -isActive:$isActive
+ 
+}
 
 
 
@@ -1721,6 +1771,7 @@ function Read-AutotaskTicketInformation {
     .NOTES
     General notes
     #>
+    [CmdletBinding()]
     param (
         [switch]$ExportCSV
     )
