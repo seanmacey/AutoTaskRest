@@ -730,7 +730,7 @@ function Read-CompanyChildAlerts() {
 }
 
 
-function Write-AutoTaskCompanies() {
+function Set-AutoTaskCompanies() {
     [CmdletBinding()]
     param (
        
@@ -809,7 +809,7 @@ function Write-AutoTaskCompanies() {
     }
 
 
-function Write-AutoTaskPrimaryEngineers() {
+function Set-AutoTaskPrimaryEngineers() {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
