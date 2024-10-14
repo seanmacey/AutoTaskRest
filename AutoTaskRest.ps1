@@ -20,7 +20,7 @@ function Invoke-AutoTaskAPIREST() {
         [string]
         $Body,
         [Parameter( Mandatory = $true )]
-        [ValidateSet("PUT", "GET", "POST", "DELETE")]
+        [ValidateSet("PUT", "GET", "POST", "DELETE","PATCH")]
         [string]
         $Method
     )
@@ -778,7 +778,8 @@ function Set-AutoTaskCompanies() {
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
         [string]
         $Classification ,
-        [Parameter(AttributeValues)]
+        [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
+        [validateSet("Matamata","Tauranga")]
         [string]
         $branch
 
@@ -790,24 +791,25 @@ function Set-AutoTaskCompanies() {
     process {
  
 
-        # write-host "CompanyID to process = $CompanyID"
+         write-verbose "Set-AutotaskCompanies CompanyID to process = $CompanyID"
 
-        If (!$CompanyID -and !$companyName) { return }
-        #if ($Manager -eq "null"){ $Manager = ""}
-        if ($CompanyType -eq "null") { $CompanyType = "" }
-        if (!$CompanyID) {
+        
+       # if ($Manager -eq "null"){ $Manager = ""}
+       # if ($CompanyType -eq "null") { $CompanyType = "" }
+        if (!($CompanyID -ge 0)) {
+            Write-Verbose "Set-AutotaskCompanies About to check by name of Company $CompanyName"
             $CompanyID = (read-autotaskCompanies -CompanyName $CompanyName -exactNameMatch -DontExpandChildIDFields).id
         }
-
+        If (!$CompanyID -and !$CompanyName) { return }
         foreach ($anID in $CompanyID) {
-            write-host "CompanyID to process = $anID"
-            Write-Verbose "About to update information in Company $anID"
-
+    
             $obj = [PSCustomObject]@{
                 id = -1
             }
-            if ($manager) {
-                if ($Manager.id -contains $Manager ){
+
+            if ($Manager -gt 0) {
+              #  write-host "checking manager $Manager"
+                if ($Engineers.id -contains $Manager ) {
                     $obj.id = $anID
                     $obj | Add-Member -NotePropertyName "ownerResourceID" -NotePropertyValue $Manager
                 }
@@ -815,15 +817,15 @@ function Set-AutoTaskCompanies() {
                     $obj.id = $anID
                     #$obj.Classification = ""}
                     $obj | Add-Member -NotePropertyName "ownerResourceID" -NotePropertyValue ""
-                    }
-                    else {
-                        $val = ($Engineers | Where-Object name -like $manager).id
-                        if ($val) {
-                            $obj.id = $anID
-                            $obj | Add-Member -NotePropertyName "ownerResourceID" -NotePropertyValue $val
+                }
+                else {
+                    $val = ($Engineers | Where-Object FullName -eq $Manager).id
+                    if ($val) {
+                        $obj.id = $anID
+                        $obj | Add-Member -NotePropertyName "ownerResourceID" -NotePropertyValue $val[0]
 
-                        } 
-                    }
+                    } 
+                }
 
 
                 if ($Manager -eq "null") { $obj.Manager = "" }
@@ -838,58 +840,46 @@ function Set-AutoTaskCompanies() {
                     #$obj.Classification = ""}
                     $obj | Add-Member -NotePropertyName "classification" -NotePropertyValue ""
 
-                    }
-                    else {
-                        $val = ($classes | Where-Object name -like $Classification).id
-                        if ($val) {
-                            $obj.id = $anID
-                            $obj | Add-Member -NotePropertyName "classification" -NotePropertyValue $val
-
-                        } 
-                    }
-
-<#
-                if ($alert) {
-
-                    $alert.alertText = $alert.alertText -replace '^(\n)*', "" #-replace "^(`n",""
-                    if ($alert.alertText) {
-                        $json = $alert | ConvertTo-Json 
-                        write-verbose "write-CompanyPrimary alertTypeID:$x Updating Primary for $anID"
-                      #  Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts') -Method PUT -Body $json | Out-Null
-                    }
-                    elseif ($alert.id) {
-                        #there is no needed alertText, so DELETE the alert
-                        write-verbose "write-CompanyPrimary alertTypeID:$x Deleting Primary for $anID"
-                       # Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts/' + $alert.id) -Method DELETE  | Out-Null
-                    }
-
                 }
                 else {
-                    if (($Primary -or $Secondary) -and ($x -ne 2)) {
-                        Write-Verbose "write-CompanyPrimary alertTypeID:$x creating a NEW alert record"
-                        $alert = [PSCustomObject]@{
-                            alertText   = "Primary Engineer: $primary`nSecondary Engineer:$secondary"
-                            alertTypeID = $x
-                            companyID   = $anID
-                        } 
-                        $json = $alert | ConvertTo-Json
-                      #  Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts') -Method POST -Body $json | Out-Null
-                    }
+                    $val = ($classes | Where-Object name -like $Classification).id
+                    if ($val) {
+                        $obj.id = $anID
+                        $obj | Add-Member -NotePropertyName "classification" -NotePropertyValue $val[0]
+
+                    } 
                 }
-                    #>
-            
-        }
 
+           
+            }
+            if ($Branch){
+                $obj.id = $anID
+                $userDefinedFields = @()
+                $v =  [PSCustomObject]@{
+                    Name = "Branch"
+                    value = $branch
+                }
+                if ($Branch -eq "null") { $v.value =""}
+                $userdefinedFields += $v
+                $obj |Add-Member -NotePropertyName userDefinedFields -NotePropertyValue $userdefinedFields
+
+            }
+ if ($obj.id -ge 0){
+
+ 
+            $json = $obj |ConvertTo-Json
+            Invoke-AutoTaskAPIREST -url 'V1.0/Companies' -Method PATCH -Body $json | Out-Null
+ }
+        }
     }
-}
     
-        end {
-
-        }
-
-
+    end {
 
     }
+
+
+
+}
 
 <#
 .SYNOPSIS
@@ -953,20 +943,20 @@ function Set-AutoTaskPrimaryEngineers() {
     }
     process {
 
-If (!$CompanyID -and !$companyName) {return}
+        If (!$CompanyID -and !$companyName) { return }
         if (!$CompanyID) {
             $CompanyID = (read-autotaskCompanies -CompanyName $CompanyName -exactNameMatch -DontExpandChildIDFields).id
         }
 
-        if ($primary -eq "null"){ $primary = ""}
-        if ($secondary -eq "null"){ $Secondary = ""}
+        if ($primary -eq "null") { $primary = "" }
+        if ($secondary -eq "null") { $Secondary = "" }
         foreach ($anID in $CompanyID) {
             write-host "CompanyID to process = $anID"
 
 
             $ChildAlerts = Read-CompanyChildAlerts -CompanyID $anID
             $x = 1
-            $a = @(1,2, 3)
+            $a = @(1, 2, 3)
             foreach ($x in $a) {
                 $alert = $ChildAlerts | Where-Object alertTypeID -eq $x
 
@@ -1049,9 +1039,9 @@ If (!$CompanyID -and !$companyName) {return}
 
     }
 
-        end {
+    end {
 
-        }
+    }
 
 
     # $json = $alert | ConvertTo-Json    
@@ -1102,16 +1092,16 @@ function Read-AutoTaskPrimaryEngineers() {
     foreach ($l in $u) {
         if ($IncludeCompanyDetail -eq $true) {
             $assignedTech = [PSCustomObject]@{
-                CompanyID             = $l.CompanyID
-                Company               = ""
-                Primary               = $null
-                Secondary             = $null
-                Branch                = ""
-                isActive              = $False
-                LastAction = ""
+                CompanyID      = $l.CompanyID
+                Company        = ""
+                Primary        = $null
+                Secondary      = $null
+                Branch         = ""
+                isActive       = $False
+                LastAction     = ""
                 Classification = ""
             }
-            $classifications =  Read-AutoTaskCompanyClassificationIcons
+            $classifications = Read-AutoTaskCompanyClassificationIcons
         }
         else {
             $assignedTech = [PSCustomObject]@{
@@ -1154,8 +1144,8 @@ function Read-AutoTaskPrimaryEngineers() {
                
                 $company = Read-AutoTaskCompanies -id $assignedTech.CompanyID -DontExpandChildIDFields
                 $assignedTech.Company = $company.companyName
-                if ($company.classification){
-                    $assignedTech.Classification = ($classifications |where-object id -eq $company.classification).name
+                if ($company.classification) {
+                    $assignedTech.Classification = ($classifications | where-object id -eq $company.classification).name
                 }
                 $assignedTech.Branch = $company.Branch
                 $assignedTech.isActive = $company.isActive
@@ -1163,7 +1153,7 @@ function Read-AutoTaskPrimaryEngineers() {
                     $assignedTech.Primary = ""
                     $assignedTech.Secondary = ""
                 }
-                $assignedTech.LastAction = ($company.lastActivityDate -split(" "))[0]
+                $assignedTech.LastAction = ($company.lastActivityDate -split (" "))[0]
             }
             #$PrimeTechnicians += $assignedTech
             $assignedTech
@@ -1219,12 +1209,12 @@ function Read-AutoTaskEngineers() {
 
 
     $result = Invoke-AutoTaskAPI -entityName 'v1.0/Resources' -includeFields $includeFields -SearchFurtherBy '{"op":"noteq","Field":"userType","value":"17"}'  -isActive:$isActive
-    $result |Add-Member -NotePropertyName FullName -NotePropertyValue ""
+    $result | Add-Member -NotePropertyName FullName -NotePropertyValue ""
     # $result | Add-Member -NotePropertyName dailyHrs -NotePropertyValue $DeafultDailyHrs
-    $DailyAvialabilities = Invoke-AutoTaskAAPI -entityName 'v1.0/ResourceDailyAvailabilities'
+    $DailyAvialabilities = Invoke-AutoTaskAPI -entityName 'v1.0/ResourceDailyAvailabilities'
 
     foreach ($Resource in $result) {
-        $result.FullName = ""
+        $resource.FullName = "$($resource.FirstName) $($resource.LastName)"
         $item = $DailyAvialabilities | Where-Object resourceID -eq $Resource.ID | Select-Object -First 1
         if ($item) {
             Write-Debug "Read-Engineers: found availabilities for $($resource.username) :$($item -join (',')) of availabilities"
@@ -1243,7 +1233,7 @@ function Read-AutoTaskEngineers() {
 }
 
 
-function Read-AutotaskQueues(){
+function Read-AutotaskQueues() {
     [CmdletBinding()]
     param (
         # [Parameter()]
