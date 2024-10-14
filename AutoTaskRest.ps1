@@ -729,7 +729,36 @@ function Read-CompanyChildAlerts() {
  
 }
 
+<#
+.SYNOPSIS
+Update Autotask Companies with specific information
 
+.DESCRIPTION
+Update Autotask Companies with Primary/ Secondary assignments
+If a field parameter is "", then NO ACTION will be taken
+If secondary field parameter is "", or is "null", then any secondary assignment for the company will be removed
+the company is updated with Primary and Secondary assignments
+
+company(s) need to be identified either by ID or EXEACT company name, else they will not be updated
+
+.PARAMETER CompanyID
+the unique autotask ID
+
+.PARAMETER CompanyName
+Alternate to ID, the EXACT name of the company in autotask
+
+.PARAMETER Manager
+Parameter description
+
+.PARAMETER Classification
+Parameter description
+
+.EXAMPLE
+An example
+
+.NOTES
+General notes
+#>#
 function Set-AutoTaskCompanies() {
     [CmdletBinding()]
     param (
@@ -745,20 +774,27 @@ function Set-AutoTaskCompanies() {
         $CompanyName,
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
         [string]
-        $Manager = "",
+        $Manager,
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
         [string]
-        $CompanyType = ""  #ClassificationIcon
+        $Classification ,
+        [Parameter(AttributeValues)]
+        [string]
+        $branch
+
     )
     begin {
-
+        $classes = Read-AutoTaskCompanyClassificationIcons
+        $Engineers = Read-AutoTaskEngineers -isActive
     }
     process {
  
 
- # write-host "CompanyID to process = $CompanyID"
+        # write-host "CompanyID to process = $CompanyID"
 
-    If (!$CompanyID -and !$companyName) {return}
+        If (!$CompanyID -and !$companyName) { return }
+        #if ($Manager -eq "null"){ $Manager = ""}
+        if ($CompanyType -eq "null") { $CompanyType = "" }
         if (!$CompanyID) {
             $CompanyID = (read-autotaskCompanies -CompanyName $CompanyName -exactNameMatch -DontExpandChildIDFields).id
         }
@@ -766,6 +802,52 @@ function Set-AutoTaskCompanies() {
         foreach ($anID in $CompanyID) {
             write-host "CompanyID to process = $anID"
             Write-Verbose "About to update information in Company $anID"
+
+            $obj = [PSCustomObject]@{
+                id = -1
+            }
+            if ($manager) {
+                if ($Manager.id -contains $Manager ){
+                    $obj.id = $anID
+                    $obj | Add-Member -NotePropertyName "ownerResourceID" -NotePropertyValue $Manager
+                }
+                elseif ($Manager -eq "null") {
+                    $obj.id = $anID
+                    #$obj.Classification = ""}
+                    $obj | Add-Member -NotePropertyName "ownerResourceID" -NotePropertyValue ""
+                    }
+                    else {
+                        $val = ($Engineers | Where-Object name -like $manager).id
+                        if ($val) {
+                            $obj.id = $anID
+                            $obj | Add-Member -NotePropertyName "ownerResourceID" -NotePropertyValue $val
+
+                        } 
+                    }
+
+
+                if ($Manager -eq "null") { $obj.Manager = "" }
+            }
+            if ($Classification) {
+                if ($classes.id -contains $Classification) {
+                    $obj.id = $anID
+                    $obj | Add-Member -NotePropertyName "classification" -NotePropertyValue $Classification
+                }
+                elseif ($Classification -eq "null") {
+                    $obj.id = $anID
+                    #$obj.Classification = ""}
+                    $obj | Add-Member -NotePropertyName "classification" -NotePropertyValue ""
+
+                    }
+                    else {
+                        $val = ($classes | Where-Object name -like $Classification).id
+                        if ($val) {
+                            $obj.id = $anID
+                            $obj | Add-Member -NotePropertyName "classification" -NotePropertyValue $val
+
+                        } 
+                    }
+
 <#
                 if ($alert) {
 
@@ -799,6 +881,7 @@ function Set-AutoTaskCompanies() {
         }
 
     }
+}
     
         end {
 
@@ -808,7 +891,42 @@ function Set-AutoTaskCompanies() {
 
     }
 
+<#
+.SYNOPSIS
+Update Autotask Companies with Primary/ Secondary assignments
 
+.DESCRIPTION
+Update Autotask Companies with Primary/ Secondary assignments
+If primary field parameter is "", or is "null", then any primary assignment for the company will be removed
+If secondary field parameter is "", or is "null", then any secondary assignment for the company will be removed
+the company is updated with Primary and Secondary assignments
+
+company(s) need to be identified either by ID or EXEACT company name, else they will not be updated
+
+.PARAMETER CompanyID
+the unique autotask ID
+
+.PARAMETER CompanyName
+Alternate to ID, the EXACT name of the company in autotask
+
+.PARAMETER Primary
+Parameter description
+
+.PARAMETER Secondary
+Parameter description
+
+.EXAMPLE
+$eng = import-csv .\PrimaryEngineers.csv
+$eng | Set-AutoTaskPrimaryEngineers
+
+or 
+Set-AutoTaskPrimaryEngineers -CompanyName "Matamata Medical Center" -Primary "sean" -Secondary "Antony"
+
+or Set-AutoTaskPrimaryEngineers -ID 29762990 -Primary sean -Secondary null
+
+.NOTES
+General notes
+#>#
 function Set-AutoTaskPrimaryEngineers() {
     [CmdletBinding()]
     param (
@@ -840,6 +958,8 @@ If (!$CompanyID -and !$companyName) {return}
             $CompanyID = (read-autotaskCompanies -CompanyName $CompanyName -exactNameMatch -DontExpandChildIDFields).id
         }
 
+        if ($primary -eq "null"){ $primary = ""}
+        if ($secondary -eq "null"){ $Secondary = ""}
         foreach ($anID in $CompanyID) {
             write-host "CompanyID to process = $anID"
 
@@ -1099,11 +1219,12 @@ function Read-AutoTaskEngineers() {
 
 
     $result = Invoke-AutoTaskAPI -entityName 'v1.0/Resources' -includeFields $includeFields -SearchFurtherBy '{"op":"noteq","Field":"userType","value":"17"}'  -isActive:$isActive
-    
+    $result |Add-Member -NotePropertyName FullName -NotePropertyValue ""
     # $result | Add-Member -NotePropertyName dailyHrs -NotePropertyValue $DeafultDailyHrs
     $DailyAvialabilities = Invoke-AutoTaskAAPI -entityName 'v1.0/ResourceDailyAvailabilities'
 
     foreach ($Resource in $result) {
+        $result.FullName = ""
         $item = $DailyAvialabilities | Where-Object resourceID -eq $Resource.ID | Select-Object -First 1
         if ($item) {
             Write-Debug "Read-Engineers: found availabilities for $($resource.username) :$($item -join (',')) of availabilities"
