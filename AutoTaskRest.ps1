@@ -5,6 +5,7 @@ $global:kissATAPIfile = 'kissAtapilogin.json'
 # check for to test REST API  https://webservices6.autotask.net/ATServicesRest/swagger/ui/index
 # Check for REST API information - such as entitis and calling methods and syntax
 #https://autotask.net/help/DeveloperHelp/Content/APIs/REST/REST_API_Home.htm
+#generic filter to use {"filter":[{"op":"gte","field":"id","value":"0"}]}
 
 
 #GET vs READ for extract
@@ -20,7 +21,7 @@ function Invoke-AutoTaskAPIREST() {
         [string]
         $Body,
         [Parameter( Mandatory = $true )]
-        [ValidateSet("PUT", "GET", "POST", "DELETE","PATCH")]
+        [ValidateSet("PUT", "GET", "POST", "DELETE", "PATCH")]
         [string]
         $Method
     )
@@ -465,23 +466,23 @@ function Read-AutoTaskCompanies {
     
     switch ($true) {
         { $id -ge 0 } {
-            write-host "Read-AUtoTaskCompanies - for a single ID $id"
+            write-verbose"Read-AUtoTaskCompanies - for a single ID $id"
             $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -id $id #; break 
             break
         }
         { $CompanyName } {
-            write-host "Read-AUtoTaskCompanies - for a exact match :$companyName"
+            write-verbose "Read-AUtoTaskCompanies - for a exact match :$companyName"
             [string]$srch = "{""op"":""$op"",""Field"":""companyName"",""value"":""$companyName""}"  #{"op":"contains","Field":"companyName","value":"imatec"}
             $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -includeFields $includeFields -SearchFirstBy Nothing  -SearchFurtherBy $srch
             break 
         }
         { $includeInactive -eq $true } { 
-            write-host "Read-AUtoTaskCompanies - for ALL companies including inactive"
+            write-verbose "Read-AUtoTaskCompanies - for ALL companies including inactive"
             $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -includeFields $includeFields -SearchFirstBy id 
             break 
         }
         default {
-            write-host "Read-AUtoTaskCompanies - for ALL Active companies"
+            write-verbose "Read-AutoTaskCompanies - for ALL Active companies"
             $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -includeFields $includeFields -SearchFirstBy isActive 
         }
     }
@@ -753,9 +754,19 @@ Parameter description
 .PARAMETER Classification
 Parameter description
 
-.EXAMPLE
-An example
+.PARAMETER Branch
 
+.EXAMPLE
+Set-AutoTaskCompanies -CompanyID 0  -branch "Tauranga - Kiss I.T"  -Verbose
+Set-AutoTaskCompanies -CompanyID 0  -branch "Tauranga"  -Verbose
+Set-AutoTaskCompanies -CompanyID 0  -branch 29682914
+Set-AutoTaskCompanies -CompanyName "Kiss IT"  -branch 29682914
+Set-AutoTaskCompanies -CompanyName "Kiss IT"  -branch 29682914 -Manager "sean Macey"
+Set-AutoTaskCompanies -CompanyName "Kiss IT"  -branch 29682914 -Manager 30761525 -Classification 13
+Set-AutoTaskCompanies -CompanyName "Kiss IT"  -branch 29682914 -Manager "sean Macey" -Classification 13
+Set-AutoTaskCompanies -CompanyName "Kiss IT"  -branch 29682914 -Manager "sean Macey" -Classification Residential
+Set-AutoTaskCompanies -CompanyName "Kiss IT"  -branch Tauranga  -Manager "sean Macey" -Classification Residential
+$CSV | Set-AutoTaskCompanies
 .NOTES
 General notes
 #>#
@@ -766,7 +777,7 @@ function Set-AutoTaskCompanies() {
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
         [int[]]
         [alias("ID")]
-        $CompanyID,
+        $CompanyID = -1,
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
         [string]
         [alias("Name")]
@@ -779,36 +790,43 @@ function Set-AutoTaskCompanies() {
         [string]
         $Classification ,
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
-        [validateSet("Matamata","Tauranga")]
+        # [validateSet("Matamata","Tauranga")]
         [string]
-        $branch
+        $Branch
 
     )
     begin {
-        $classes = Read-AutoTaskCompanyClassificationIcons
-        $Engineers = Read-AutoTaskEngineers -isActive
+        if ($Classification -and ($Classification -ne "null")) { $classes = Read-AutoTaskCompanyClassificationIcons }
+        if ($Manager -and ($Manager -ne "null")) { $Engineers = Read-AutoTaskEngineers -isActive }
+        if ($Branch -and ($Branch -ne "null")) { $Branches = ( Invoke-AutoTaskAPIREST -Method GET -url '/V1.0/UserDefinedFieldListItems/query?search={"filter":[{"op":"eq","field":"udfFieldId","value":"29682941"}]}' ).items }
+
+        <#
+      UserDefinedFieldDefinitions  . Branch => id = 29682941 (datatype 3)
+      #>
     }
     process {
  
 
-         write-verbose "Set-AutotaskCompanies CompanyID to process = $CompanyID"
+        write-verbose "Set-AutotaskCompanies CompanyID to process = $CompanyID"
 
-        
-       # if ($Manager -eq "null"){ $Manager = ""}
-       # if ($CompanyType -eq "null") { $CompanyType = "" }
-        if (!($CompanyID -ge 0)) {
-            Write-Verbose "Set-AutotaskCompanies About to check by name of Company $CompanyName"
-            $CompanyID = (read-autotaskCompanies -CompanyName $CompanyName -exactNameMatch -DontExpandChildIDFields).id
+        # if ($Manager -eq "null"){ $Manager = ""}
+        # if ($CompanyType -eq "null") { $CompanyType = "" }
+        if (($CompanyID -eq -1) -and $CompanyName) {
+            #   if (!$CompanyID) {
+            Write-Verbose "Set-AutotaskCompanies About to check by name of Company $CompanyName : Comnpany ID= $CompanyID"
+            $res = read-autotaskCompanies -CompanyName $CompanyName -exactNameMatch -DontExpandChildIDFields
+            if ($Res) { $CompanyID = $res.ID }
+
         }
-        If (!$CompanyID -and !$CompanyName) { return }
-        foreach ($anID in $CompanyID) {
-    
+        
+        If ($CompanyID -eq -1) { return }      
+         foreach ($anID in $CompanyID) {
             $obj = [PSCustomObject]@{
                 id = -1
             }
 
             if ($Manager -gt 0) {
-              #  write-host "checking manager $Manager"
+                #  write-host "checking manager $Manager"
                 if ($Engineers.id -contains $Manager ) {
                     $obj.id = $anID
                     $obj | Add-Member -NotePropertyName "ownerResourceID" -NotePropertyValue $Manager
@@ -819,16 +837,18 @@ function Set-AutoTaskCompanies() {
                     $obj | Add-Member -NotePropertyName "ownerResourceID" -NotePropertyValue ""
                 }
                 else {
-                    $val = ($Engineers | Where-Object FullName -eq $Manager).id
-                    if ($val) {
+                    $val = ""
+                    $res = $Engineers | Where-Object FullName -eq $Manager
+                    if ($Res) {
+                        $val = $res.id
                         $obj.id = $anID
-                        $obj | Add-Member -NotePropertyName "ownerResourceID" -NotePropertyValue $val[0]
-
-                    } 
+                        $obj | Add-Member -NotePropertyName "ownerResourceID" -NotePropertyValue $val
+                    }
+                    else {
+                        throw "Set-AutoTaskCompanies: Can not fully update CompanyID $anID : could not find Engineer/Manager in autotask matching $Manager "
+                    }                         
+               
                 }
-
-
-                if ($Manager -eq "null") { $obj.Manager = "" }
             }
             if ($Classification) {
                 if ($classes.id -contains $Classification) {
@@ -842,34 +862,55 @@ function Set-AutoTaskCompanies() {
 
                 }
                 else {
-                    $val = ($classes | Where-Object name -like $Classification).id
-                    if ($val) {
+                    $val = ""
+                    $res = $classes | Where-Object name -like $Classification
+                    if ($res) {
+                        $val = $res.id
                         $obj.id = $anID
-                        $obj | Add-Member -NotePropertyName "classification" -NotePropertyValue $val[0]
+                        $obj | Add-Member -NotePropertyName "classification" -NotePropertyValue $val
 
                     } 
+                         
+                    else {
+                        throw "Set-AutoTaskCompanies: Can not fully update CompanyID $anID : could not find classification in autotask matching $Classification "
+                    }
                 }
+                
 
            
             }
-            if ($Branch){
-                $obj.id = $anID
-                $userDefinedFields = @()
-                $v =  [PSCustomObject]@{
-                    Name = "Branch"
-                    value = $branch
+            if ($Branch) {
+                # if ($Branches.id -contains $Branch) {$Branch = ($Branches |Where-Object id -eq $Branch).valueFor}
+                $val2 = $Branch
+                if ($Branches.id -contains $Branch) {
+                    $val2 = ($Branches | Where-Object id -eq $Branch)[0].valueforExport
                 }
-                if ($Branch -eq "null") { $v.value =""}
-                $userdefinedFields += $v
-                $obj |Add-Member -NotePropertyName userDefinedFields -NotePropertyValue $userdefinedFields
+                if ($Branches.valueforDisplay -contains $Branch) {
+                    $val2 = ($Branches | Where-Object valueforDisplay -eq $Branch)[0].valueforExport
+                }
+
+
+                if (($Branches.valueforExport -contains $val2) -or ($Branches.valueforDisplay -contains $val2)) {
+                    $obj.id = $anID
+                    $userDefinedFields = @()
+                    $v = [PSCustomObject]@{
+                        Name  = "Branch"
+                        value = $val2
+                    }
+                    if ($Branch -eq "null") { $v.value = "" }
+                    $userdefinedFields += $v
+                    $obj | Add-Member -NotePropertyName userDefinedFields -NotePropertyValue $userdefinedFields
+                }
+
 
             }
- if ($obj.id -ge 0){
-
- 
-            $json = $obj |ConvertTo-Json
-            Invoke-AutoTaskAPIREST -url 'V1.0/Companies' -Method PATCH -Body $json | Out-Null
- }
+            if ($obj.id -ge -1) {
+                $json = $obj | ConvertTo-Json -Compress
+                write-Host "Set-AutotaskCompany update  $json"
+                Invoke-AutoTaskAPIREST -url 'V1.0/Companies' -Method PATCH -Body $json | Out-Null
+            
+            }
+            
         }
     }
     
@@ -923,7 +964,7 @@ function Set-AutoTaskPrimaryEngineers() {
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
         [int[]]
         [alias("ID")]
-        $CompanyID,
+        $CompanyID = -1,
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
         [string]
         [alias("Name")]
@@ -943,10 +984,11 @@ function Set-AutoTaskPrimaryEngineers() {
     }
     process {
 
-        If (!$CompanyID -and !$companyName) { return }
-        if (!$CompanyID) {
-            $CompanyID = (read-autotaskCompanies -CompanyName $CompanyName -exactNameMatch -DontExpandChildIDFields).id
+        if (($CompanyID -eq -1) -and $CompanyName) {
+            $res = read-autotaskCompanies -CompanyName $CompanyName -exactNameMatch -DontExpandChildIDFields
+            if ($res) { $CompanyID = $res[0].id }
         }
+        If ($CompanyID -eq -1) { return }
 
         if ($primary -eq "null") { $primary = "" }
         if ($secondary -eq "null") { $Secondary = "" }
@@ -1233,17 +1275,17 @@ function Read-AutoTaskEngineers() {
 }
 
 
-function Read-AutotaskQueues() {
-    [CmdletBinding()]
-    param (
-        # [Parameter()]
-        # [TypeName]
-        # $ParameterName
-    )
+# function Read-AutotaskQueues() {
+#     [CmdletBinding()]
+#     param (
+#         # [Parameter()]
+#         # [TypeName]
+#         # $ParameterName
+#     )
 
-    $result = Invoke-AutoTaskAPI -entityName 'v1.0/Resources' #-includeFields $includeFields -SearchFurtherBy '{"op":"noteq","Field":"userType","value":"17"}'  -isActive:$isActive
+#     $result = Invoke-AutoTaskAPI -entityName 'v1.0/Resources' #-includeFields $includeFields -SearchFurtherBy '{"op":"noteq","Field":"userType","value":"17"}'  -isActive:$isActive
  
-}
+# }
 
 
 
