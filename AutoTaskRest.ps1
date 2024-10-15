@@ -466,7 +466,7 @@ function Read-AutoTaskCompanies {
     
     switch ($true) {
         { $id -ge 0 } {
-            write-verbose"Read-AUtoTaskCompanies - for a single ID $id"
+            write-verbose "Read-AUtoTaskCompanies - for a single ID $id"
             $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -id $id #; break 
             break
         }
@@ -829,11 +829,13 @@ function Set-AutoTaskCompanies() {
                 #  write-host "checking manager $Manager"
                 if ($Engineers.id -contains $Manager ) {
                     $obj.id = $anID
+                    write-verbose " changing manager by ID = $Manager"
                     $obj | Add-Member -NotePropertyName "ownerResourceID" -NotePropertyValue $Manager
                 }
                 elseif ($Manager -eq "null") {
                     $obj.id = $anID
                     #$obj.Classification = ""}
+                    write-verbose " Changing manager by NULL"
                     $obj | Add-Member -NotePropertyName "ownerResourceID" -NotePropertyValue ""
                 }
                 else {
@@ -842,11 +844,13 @@ function Set-AutoTaskCompanies() {
                     if ($Res) {
                         $val = $res.id
                         $obj.id = $anID
+                        write-verbose " Changing manager by Fullname $Manger = ID $val "
                         $obj | Add-Member -NotePropertyName "ownerResourceID" -NotePropertyValue $val
-                    }
+
                     else {
-                        throw "Set-AutoTaskCompanies: Can not fully update CompanyID $anID : could not find Engineer/Manager in autotask matching $Manager "
-                    }                         
+                              throw "Set-AutoTaskCompanies: Can not fully update CompanyID $anID : could not find Engineer/Manager in autotask matching $Manager "
+                    }                      }
+                       
                
                 }
             }
@@ -868,12 +872,12 @@ function Set-AutoTaskCompanies() {
                         $val = $res.id
                         $obj.id = $anID
                         $obj | Add-Member -NotePropertyName "classification" -NotePropertyValue $val
+                   else {
+                        throw "Set-AutoTaskCompanies: Can not fully update CompanyID $anID : could not find classification in autotask matching $Classification "
 
                     } 
                          
-                    else {
-                        throw "Set-AutoTaskCompanies: Can not fully update CompanyID $anID : could not find classification in autotask matching $Classification "
-                    }
+                     }
                 }
                 
 
