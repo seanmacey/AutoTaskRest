@@ -928,22 +928,23 @@ function Set-AutoTaskCompanies() {
 
 
             }
-            if (!($null -eq $isActive)){
+            if ($null -ne $isActive){
                 $obj.id = $anID
                 $obj | Add-Member -NotePropertyName isActive -NotePropertyValue $isActive
+                
             }
             if ($obj.id -ge -1) {
                 $json = $obj | ConvertTo-Json -Compress
-                write-Host "Set-AutotaskCompany update  ID $obj.ID"
-               # Invoke-AutoTaskAPIREST -url 'V1.0/Companies' -Method PATCH -Body $json | Out-Null
-              #  $ipatch =$patchtxt +1
-                $patchObj += $Obj
-                if ($patchObj.count -gt 200){
-                    $json = ($patchObj | ConvertTo-Json -Compress).trim("[").trim("]")
-                    Write-verbose " Set-AutotaskCompany update Json body $json"
-                    Invoke-AutoTaskAPIREST -url 'V1.0/Companies' -Method PATCH -Body $json | Out-Null
-                    $patchObj = @()
-                }
+                write-Host "Set-AutotaskCompany update  $obj"
+                Invoke-AutoTaskAPIREST -url 'V1.0/Companies' -Method PATCH -Body $json | Out-Null
+              
+                # $patchObj += $Obj
+                # if ($patchObj.count -gt 200){
+                #     $json = ($patchObj | ConvertTo-Json -Compress).trim("[").trim("]")
+                #     Write-verbose " Set-AutotaskCompany update Json body $json"
+                #     Invoke-AutoTaskAPIREST -url 'V1.0/Companies' -Method PATCH -Body $json | Out-Null
+                #     $patchObj = @()
+                # }
 
             }
 
@@ -952,11 +953,11 @@ function Set-AutoTaskCompanies() {
     }
     
     end {
-        if ($patchObj.count -gt 0){
-            $json = ($patchObj | ConvertTo-Json -Compress).trim("[").trim("]")
-            Write-verbose " Set-AutotaskCompany update Json body $json"
-            Invoke-AutoTaskAPIREST -url 'V1.0/Companies' -Method PATCH -Body $json | Out-Null
-        }
+        # if ($patchObj.count -gt 0){
+        #     $json = ($patchObj | ConvertTo-Json -Compress).trim("[").trim("]")
+        #     Write-verbose " Set-AutotaskCompany update Json body $json"
+        #     Invoke-AutoTaskAPIREST -url 'V1.0/Companies' -Method PATCH -Body $json | Out-Null
+        # }
     }
 
 
