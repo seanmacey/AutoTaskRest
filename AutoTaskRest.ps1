@@ -488,7 +488,7 @@ function Read-AutoTaskCompanies {
     }
 
     if ($rc) {
-        $branch = $rc.userDefinedFields | Where-Object { $_.name -eq "Branch" }
+        $branch = ($rc.userDefinedFields | Where-Object { $_.name -eq "Branch" })[0]
         $rc = $rc | select-Object -Property * , @{name = "Branch"; e = { $branch.value } } -ErrorAction SilentlyContinue | Select-Object -ExcludeProperty userDefinedFields
         if (!($DontExpandChildIDFields -eq $true)) {
 
@@ -799,7 +799,9 @@ function Set-AutoTaskCompanies() {
         if ($Classification -and ($Classification -ne "null")) { $classes = Read-AutoTaskCompanyClassificationIcons }
         if ($Manager -and ($Manager -ne "null")) { $Engineers = Read-AutoTaskEngineers -isActive }
         if ($Branch -and ($Branch -ne "null")) { $Branches = ( Invoke-AutoTaskAPIREST -Method GET -url '/V1.0/UserDefinedFieldListItems/query?search={"filter":[{"op":"eq","field":"udfFieldId","value":"29682941"}]}' ).items }
-
+      #  $ipatch = 0
+        $patchObj =@()
+    
         <#
       UserDefinedFieldDefinitions  . Branch => id = 29682941 (datatype 3)
       #>
@@ -846,10 +848,10 @@ function Set-AutoTaskCompanies() {
                         $obj.id = $anID
                         write-verbose " Changing manager by Fullname $Manger = ID $val "
                         $obj | Add-Member -NotePropertyName "ownerResourceID" -NotePropertyValue $val
-
+                    }
                     else {
                               throw "Set-AutoTaskCompanies: Can not fully update CompanyID $anID : could not find Engineer/Manager in autotask matching $Manager "
-                    }                      }
+                    }                      
                        
                
                 }
@@ -910,16 +912,28 @@ function Set-AutoTaskCompanies() {
             }
             if ($obj.id -ge -1) {
                 $json = $obj | ConvertTo-Json -Compress
-                write-Host "Set-AutotaskCompany update  $json"
-                Invoke-AutoTaskAPIREST -url 'V1.0/Companies' -Method PATCH -Body $json | Out-Null
-            
+                write-Host "Set-AutotaskCompany update  ID $obj.ID"
+               # Invoke-AutoTaskAPIREST -url 'V1.0/Companies' -Method PATCH -Body $json | Out-Null
+              #  $ipatch =$patchtxt +1
+                $patchObj += $Obj
+                if ($patchObj.count -gt 500){
+                    $json = ($patchObj | ConvertTo-Json -Compress).trim("[").trim("]")
+                    Write-verbose " Set-AutotaskCompany update Json body $json"
+                    Invoke-AutoTaskAPIREST -url 'V1.0/Companies' -Method PATCH -Body $json | Out-Null
+                    $patchObj = @()
+                }
+
             }
             
         }
     }
     
     end {
-
+        if ($patchObj.count -gt 0){
+            $json = ($patchObj | ConvertTo-Json -Compress).trim("[").trim("]")
+            Write-verbose " Set-AutotaskCompany update Json body $json"
+            Invoke-AutoTaskAPIREST -url 'V1.0/Companies' -Method PATCH -Body $json | Out-Null
+        }
     }
 
 
@@ -984,7 +998,8 @@ function Set-AutoTaskPrimaryEngineers() {
 
     )
     begin {
-
+ #$i = 0
+ #$jsontxt =""
     }
     process {
 
@@ -998,7 +1013,6 @@ function Set-AutoTaskPrimaryEngineers() {
         if ($secondary -eq "null") { $Secondary = "" }
         foreach ($anID in $CompanyID) {
             write-host "CompanyID to process = $anID"
-
 
             $ChildAlerts = Read-CompanyChildAlerts -CompanyID $anID
             $x = 1
@@ -1060,11 +1074,14 @@ function Set-AutoTaskPrimaryEngineers() {
                         $json = $alert | ConvertTo-Json 
                         write-verbose "write-CompanyPrimary alertTypeID:$x Updating Primary for $anID"
                         Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts') -Method PUT -Body $json | Out-Null
+                       # $jsontxt += $json
                     }
                     elseif ($alert.id) {
                         #there is no needed alertText, so DELETE the alert
                         write-verbose "write-CompanyPrimary alertTypeID:$x Deleting Primary for $anID"
                         Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts/' + $alert.id) -Method DELETE  | Out-Null
+                      #  $jsontxt += $json
+
                     }
 
                 }
@@ -1078,15 +1095,23 @@ function Set-AutoTaskPrimaryEngineers() {
                         } 
                         $json = $alert | ConvertTo-Json
                         Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts') -Method POST -Body $json | Out-Null
+                      #  $jsontxt += $json
+
                     }
                 }
             }
+            # $i = $i + 1
+            # if ($i -gt 10)
+            # {
+            #     $i = 0
+            #     write-Host "Set primary - expect loop \n $jsontxt"
+            # }
         }
-
+        
     }
 
     end {
-
+        #write-host "set primary: Now finsih everything \n $jsontxt"
     }
 
 
