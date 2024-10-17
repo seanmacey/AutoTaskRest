@@ -818,7 +818,7 @@ function Set-AutoTaskCompanies() {
         if ($Manager -and ($Manager -ne "null")) { $Engineers = Read-AutoTaskEngineers -isActive }
         if ($Branch -and ($Branch -ne "null")) { $Branches = ( Invoke-AutoTaskAPIREST -Method GET -url '/V1.0/UserDefinedFieldListItems/query?search={"filter":[{"op":"eq","field":"udfFieldId","value":"29682941"}]}' ).items }
       #  $ipatch = 0
-        $patchObj =@()
+       # $patchObj =@()
     
         <#
       UserDefinedFieldDefinitions  . Branch => id = 29682941 (datatype 3)
