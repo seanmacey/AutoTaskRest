@@ -16,13 +16,13 @@ $global:kissATAPIfile = 'kissAtapilogin.json'
 Organization type
 The organization type describes your company's relationship with another organization. Organization types are pre-defined; they cannot be modified or added to. Options include the following:
 
-Customer: An organization to which you are selling products or services.
-Lead: An organization type used to indicate a potential customer.
-Prospect: An organization type used to indicate a likely customer.
-Dead: A lead that never became a customer.
-Cancelation: An Autotask organization type denoting a former customer.
-Vendor: An organization type whose primary business relationship with your company is to provide goods and services.
-Partner: An organization type assigned to organizations like VARs, outsourcing partners, etc.
+1Customer: An organization to which you are selling products or services.
+2Lead: An organization type used to indicate a potential customer.
+3Prospect: An organization type used to indicate a likely customer.
+4Dead: A lead that never became a customer.
+6Cancelation: An Autotask organization type denoting a former customer.
+7Vendor: An organization type whose primary business relationship with your company is to provide goods and services.
+8Partner: An organization type assigned to organizations like VARs, outsourcing partners, etc.
 #>
 
 function Invoke-AutoTaskAPIREST() {
@@ -1095,6 +1095,7 @@ function Set-AutoTaskPrimaryEngineers() {
                     }
                     $alert.alertText = $alert.alertText -replace '^(\n)*', "" #-replace "^(`n",""
                     if ($alert.alertText) {
+                        #the alert exists - so update it
                         $json = $alert | ConvertTo-Json 
                         write-verbose "write-CompanyPrimary alertTypeID:$x Updating Primary for $anID"
                         Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts') -Method PUT -Body $json | Out-Null
@@ -1111,6 +1112,7 @@ function Set-AutoTaskPrimaryEngineers() {
                 }
                 else {
                     if (($Primary -or $Secondary) -and ($x -ne 2)) {
+                        #creating a new alert
                         Write-Verbose "write-CompanyPrimary alertTypeID:$x creating a NEW alert record"
                         $alert = [PSCustomObject]@{
                             alertText   = "Primary Engineer: $primary`nSecondary Engineer:$secondary"
