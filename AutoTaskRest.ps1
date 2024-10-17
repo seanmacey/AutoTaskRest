@@ -1035,6 +1035,7 @@ function Set-AutoTaskPrimaryEngineers() {
                         TextPrimary    = ""
                         TextSecondary  = ""
                         CompanyAlertID = $null
+                        
                     }
                     if ($alert.AlertText -imatch "secondary\s+tech.*[:][\s|\w]*\n|secondary\s+engineer.*[:][\s|\w]*\n|secondary\s+tech.*[:][\s|\w]*|secondary\s+engineer.*[:][\s|\w]*") {
                         $assignedTech.TextSecondary = ($Matches[0]) -replace ("\n", "")
