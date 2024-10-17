@@ -11,6 +11,20 @@ $global:kissATAPIfile = 'kissAtapilogin.json'
 #GET vs READ for extract
 #Measure vs Build
 #invoke
+
+<#
+Organization type
+The organization type describes your company's relationship with another organization. Organization types are pre-defined; they cannot be modified or added to. Options include the following:
+
+Customer: An organization to which you are selling products or services.
+Lead: An organization type used to indicate a potential customer.
+Prospect: An organization type used to indicate a likely customer.
+Dead: A lead that never became a customer.
+Cancelation: An Autotask organization type denoting a former customer.
+Vendor: An organization type whose primary business relationship with your company is to provide goods and services.
+Partner: An organization type assigned to organizations like VARs, outsourcing partners, etc.
+#>
+
 function Invoke-AutoTaskAPIREST() {
     [CmdletBinding()]
     param (
@@ -790,9 +804,13 @@ function Set-AutoTaskCompanies() {
         [string]
         $Classification ,
         [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
-        # [validateSet("Matamata","Tauranga")]
         [string]
-        $Branch
+        $Branch,
+        [Parameter(Mandatory = $false, ValueFromPipelineByPropertyName)]
+        [bool]
+        $isActive
+
+
 
     )
     begin {
@@ -910,13 +928,17 @@ function Set-AutoTaskCompanies() {
 
 
             }
+            if (!($null -eq $isActive)){
+                $obj.id = $anID
+                $obj | Add-Member -NotePropertyName isActive -NotePropertyValue $isActive
+            }
             if ($obj.id -ge -1) {
                 $json = $obj | ConvertTo-Json -Compress
                 write-Host "Set-AutotaskCompany update  ID $obj.ID"
                # Invoke-AutoTaskAPIREST -url 'V1.0/Companies' -Method PATCH -Body $json | Out-Null
               #  $ipatch =$patchtxt +1
                 $patchObj += $Obj
-                if ($patchObj.count -gt 500){
+                if ($patchObj.count -gt 200){
                     $json = ($patchObj | ConvertTo-Json -Compress).trim("[").trim("]")
                     Write-verbose " Set-AutotaskCompany update Json body $json"
                     Invoke-AutoTaskAPIREST -url 'V1.0/Companies' -Method PATCH -Body $json | Out-Null
@@ -924,6 +946,7 @@ function Set-AutoTaskCompanies() {
                 }
 
             }
+
             
         }
     }
