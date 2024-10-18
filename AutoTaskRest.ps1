@@ -333,7 +333,10 @@ function Invoke-AutoTaskAPI {
 }
 
 
+function read-autotaskCompanyQuickNoteLast()
+{
 
+}
 
 
 function Convert-ObjArrayDateTimesToSearchableStrings () {
