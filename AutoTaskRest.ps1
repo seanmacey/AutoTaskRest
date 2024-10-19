@@ -419,8 +419,12 @@ function Read-AutoTaskCompanyClassificationIcons() {
 function Read-AUtoTaskMostRecentCompanyTicket() {
     [CmdletBinding()]
     param (  )
-    $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Tickets'   -SearchFirstBy Nothing -includeFields '"CompanyID","TicketNum' -SearchFurtherBy '{"op":"gte","Field":"lastActivityDate","value":"2024-10-01T00:00:00"}' -LoopCount 2
-    $rc
+    $rc = Read-AutoTaskTickets -LastActionFromDate "2020-01-01T00:00:00" -Verbose -DontexpandticketInformation -whereResourceAssigned -includeFields ("companyID","completedDate","id","title","createDate") -DontincludeNonComplete |Group-Object companyID
+    #$rc.psobject.properties.remove('userDefinedFields')
+    foreach ($item in $rc)
+    {
+        ($item[0].Group |Sort-Object -Descending completedDate)[0]
+    }
 }
 
 
@@ -2233,7 +2237,8 @@ function Read-AutoTaskTickets {
         [string[]]
         $includeFields = $null,
         [switch]$ReturnAllFields = $false,
-        [switch]$IncludeAllNonComplete = $false,
+        [switch]$IncludeAllNonComplete = $null,
+        [switch]$DontincludeNonComplete = $false,
         [switch]$DontexpandticketInformation = $false,
         [switch]$whereResourceAssigned,
         [int]$InLastDays = $null,
@@ -2272,11 +2277,18 @@ function Read-AutoTaskTickets {
         $i = ($i + ',{"op":"Exist","Field":"assignedResourceID"}').Trim(',')
         $u =$u + 1
     }
+    if ($DontincludeNonComplete -eq $true)
+    {
+        $i = ($i + ',{"op":"Exist","Field":"completedDate"}').Trim(',')
+        $u =$u + 1
+    }
+
     if ($DoSearchBy) {
         $searchby = $DoSearchBy
     }
     else{
         if ($u -gt 0) {
+  #          $searchby = '{"op":"and","items":[{"op":"gte","Field":"lastActivityDate","value":"' + $LastActionFromDateStr + '"}'  + ',' + $i + ']}'
             $searchby = '{"op":"and","items":[{"op":"gte","Field":"lastActivityDate","value":"' + $LastActionFromDateStr + '"}'  + ',' + $i + ']}'
         }
         else {
@@ -2295,7 +2307,7 @@ function Read-AutoTaskTickets {
     }
 
 
-    if ($IncludeAllNonComplete) {
+    if ($IncludeAllNonComplete -eq $true) {
         # OR two operands so that we can get noncomplete tickets as well as any other Searcth
     #    $searchby = '{"op":"or","items":[{"op":"notExist","Field":"completedDate"}' + ',' + $searchby + ']}'
         $searchby = '{"op":"or","items":[{"op":"and","items":[{"op":"notExist","Field":"completedDate"},{"op":"Exist","Field":"assignedResourceID"}]}' + ',' + $searchby + ']}'
@@ -2341,6 +2353,7 @@ function Find-CompaniesInTickets() {
     
     .DESCRIPTION
     Long description
+    FYI: in order for some filters to work you SHOULD include id in the search - else the query may never finish
     
     .PARAMETER tickets
     Parameter description
