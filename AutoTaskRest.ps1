@@ -169,7 +169,8 @@ function Invoke-AutoTaskAPI {
         [Parameter(ParameterSetName = 'entity', Mandatory = $false)]
         [string[]]
         $includeFields,
-
+        [string]
+        $CheckDuplicatesOf = $null,
         # Parameter help description
         [Parameter(Mandatory = $false)]
         [Int32]
@@ -179,7 +180,8 @@ function Invoke-AutoTaskAPI {
         [switch]
         $returnRaw = $false,
 
-        [PSCustomObject]$LoginInfo
+        [PSCustomObject]$LoginInfo,
+        [PSCustomObject]$alreadyCapturedData
 
 
         # [string]$apiUsername,
@@ -194,6 +196,22 @@ function Invoke-AutoTaskAPI {
     #     Secret   = '' #ConvertFrom-SecureString -SecureString $l_secret
     #     url      = ''# "$($r.url)"
     # }
+    if ($alreadyCapturedData) {
+        if ($CheckDuplicatesOf) {
+            write-verbose "i-ATAPI: checking for duplicate values"
+            $arethereduplicates = $alreadyCapturedData | Group-Object $CheckDuplicatesOf
+            if ($arethereduplicates.Count -ne $alreadyCapturedData.Count) {
+                #   if  ($arethereduplicates.Count -gt 1){
+                write-host "I-AutotaskAPI $($arethereduplicates.Count) duplicates exists"
+                write-host "I-AutotaskAPI did not return all values"
+                #throw "NOT ALL DATA RETURNED, $CheckDuplicatesOf has duplicates"
+                return
+
+            }
+
+        } 
+    }
+
     if ($LoginINfo) {
         Write-Verbose "Invoke-AutoTask: using the paramatised LoginInfo instead of the pre-saved authentication details"
         $saveobj = $LoginINfo
@@ -320,21 +338,33 @@ function Invoke-AutoTaskAPI {
     
     Write-verbose "getting  $entityname items  $url2"
     $Result = Invoke-RestMethod -Method Get -Uri $url2  -Headers $kissATheader  #-SkipHeaderValidation
-    $apidata = $Result.items
+    $RecordsRecieved = $Result.pageDetails.Count
+    $apidata = $Result.items 
+    Write-Verbose "retrieved $RecordsRecieved records: which should equal $($apidata.count)"
+    Write-Verbose "returned PageDetails `n$($Result.pageDetails |ConvertTo-Json)"
+
     
     #now prepare the next 500 items
     $Nextpage = $Result.pageDetails.nextPageUrl
     if (($LoopCount -gt 1) -and $Nextpage) {
         Write-Verbose "Invoke-AutoTaskAPI LoopCount Value = $Loopcount"
-        $apidata += Invoke-AutoTaskAPI -url $Nextpage -LoopCount ($LoopCount - 1)
+
+        if ($CheckDuplicatesOf) {
+            $alreadyCapturedData += $apidata
+            $apidata += Invoke-AutoTaskAPI -url $Nextpage -LoopCount ($LoopCount - 1) -CheckDuplicatesOf $CheckDuplicatesOf -alreadyCapturedData $alreadyCapturedData
+        }
+        else {
+            $apidata += Invoke-AutoTaskAPI -url $Nextpage -LoopCount ($LoopCount - 1) 
+        }
+
+
     }
     Write-Verbose "Invoke-AutoTaskAPI total Returned items = $($apidata.count)"
     return $apidata
 }
 
 
-function read-autotaskCompanyQuickNoteLast()
-{
+function read-autotaskCompanyQuickNoteLast() {
 
 }
 
@@ -385,6 +415,14 @@ function Read-AutoTaskCompanyClassificationIcons() {
     $rc = Invoke-AutoTaskAPI -entityName 'v1.0/ClassificationIcons'   -SearchFirstBy id
     $rc
 }
+
+function Read-AUtoTaskMostRecentCompanyTicket() {
+    [CmdletBinding()]
+    param (  )
+    $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Tickets'   -SearchFirstBy Nothing -includeFields '"CompanyID","TicketNum' -SearchFurtherBy '{"op":"gte","Field":"lastActivityDate","value":"2024-10-01T00:00:00"}' -LoopCount 2
+    $rc
+}
+
 
 function Read-AutoTaskCompanies {
     <#
@@ -495,12 +533,12 @@ function Read-AutoTaskCompanies {
         }
         { $includeInactive -eq $true } { 
             write-verbose "Read-AUtoTaskCompanies - for ALL companies including inactive"
-            $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -includeFields $includeFields -SearchFirstBy id 
+            $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -includeFields $includeFields -SearchFirstBy id -CheckDuplicatesOf "id"
             break 
         }
         default {
             write-verbose "Read-AutoTaskCompanies - for ALL Active companies"
-            $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -includeFields $includeFields -SearchFirstBy isActive 
+            $rc = Invoke-AutoTaskAPI -entityName 'v1.0/Companies'  -includeFields $includeFields -SearchFirstBy isActive -CheckDuplicatesOf "id"
         }
     }
 
@@ -820,8 +858,8 @@ function Set-AutoTaskCompanies() {
         if ($Classification -and ($Classification -ne "null")) { $classes = Read-AutoTaskCompanyClassificationIcons }
         if ($Manager -and ($Manager -ne "null")) { $Engineers = Read-AutoTaskEngineers -isActive }
         if ($Branch -and ($Branch -ne "null")) { $Branches = ( Invoke-AutoTaskAPIREST -Method GET -url '/V1.0/UserDefinedFieldListItems/query?search={"filter":[{"op":"eq","field":"udfFieldId","value":"29682941"}]}' ).items }
-      #  $ipatch = 0
-       # $patchObj =@()
+        #  $ipatch = 0
+        # $patchObj =@()
     
         <#
       UserDefinedFieldDefinitions  . Branch => id = 29682941 (datatype 3)
@@ -843,7 +881,7 @@ function Set-AutoTaskCompanies() {
         }
         
         If ($CompanyID -eq -1) { return }      
-         foreach ($anID in $CompanyID) {
+        foreach ($anID in $CompanyID) {
             $obj = [PSCustomObject]@{
                 id = -1
             }
@@ -871,7 +909,7 @@ function Set-AutoTaskCompanies() {
                         $obj | Add-Member -NotePropertyName "ownerResourceID" -NotePropertyValue $val
                     }
                     else {
-                              throw "Set-AutoTaskCompanies: Can not fully update CompanyID $anID : could not find Engineer/Manager in autotask matching $Manager "
+                        throw "Set-AutoTaskCompanies: Can not fully update CompanyID $anID : could not find Engineer/Manager in autotask matching $Manager "
                     }                      
                        
                
@@ -895,12 +933,12 @@ function Set-AutoTaskCompanies() {
                         $val = $res.id
                         $obj.id = $anID
                         $obj | Add-Member -NotePropertyName "classification" -NotePropertyValue $val
-                   else {
-                        throw "Set-AutoTaskCompanies: Can not fully update CompanyID $anID : could not find classification in autotask matching $Classification "
+                        else {
+                            throw "Set-AutoTaskCompanies: Can not fully update CompanyID $anID : could not find classification in autotask matching $Classification "
 
-                    } 
+                        } 
                          
-                     }
+                    }
                 }
                 
 
@@ -931,7 +969,7 @@ function Set-AutoTaskCompanies() {
 
 
             }
-            if ($null -ne $isActive){
+            if ($null -ne $isActive) {
                 $obj.id = $anID
                 $obj | Add-Member -NotePropertyName isActive -NotePropertyValue $isActive
                 
@@ -1025,8 +1063,8 @@ function Set-AutoTaskPrimaryEngineers() {
 
     )
     begin {
- #$i = 0
- #$jsontxt =""
+        #$i = 0
+        #$jsontxt =""
     }
     process {
 
@@ -1103,13 +1141,13 @@ function Set-AutoTaskPrimaryEngineers() {
                         $json = $alert | ConvertTo-Json 
                         write-verbose "write-CompanyPrimary alertTypeID:$x Updating Primary for $anID"
                         Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts') -Method PUT -Body $json | Out-Null
-                       # $jsontxt += $json
+                        # $jsontxt += $json
                     }
                     elseif ($alert.id) {
                         #there is no needed alertText, so DELETE the alert
                         write-verbose "write-CompanyPrimary alertTypeID:$x Deleting Primary for $anID"
                         Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts/' + $alert.id) -Method DELETE  | Out-Null
-                      #  $jsontxt += $json
+                        #  $jsontxt += $json
 
                     }
 
@@ -1125,7 +1163,7 @@ function Set-AutoTaskPrimaryEngineers() {
                         } 
                         $json = $alert | ConvertTo-Json
                         Invoke-AutoTaskAPIREST -url ('V1.0/Companies/' + $anID + '/Alerts') -Method POST -Body $json | Out-Null
-                      #  $jsontxt += $json
+                        #  $jsontxt += $json
 
                     }
                 }
@@ -2187,52 +2225,85 @@ function Read-AutoTaskTickets {
         [int[]]
         $CompanyIDs, # =    (29762985 , 0, 1, 29740186 , 29761818, 29762138), #      Imatec Solutions (As Customer), then several Kiss companies
         [DateTime]
-        $LastActionFromDate = (Get-date), # [dateTime]"2023-01-01T00:00:00",
+        $LastActionFromDate = (Get-date).AddDays(-60), # [dateTime]"2023-01-01T00:00:00",
         [string]
         $TitleContains,
         [string]
         $TitleBeginsWith,
+        [string[]]
+        $includeFields = $null,
         [switch]$ReturnAllFields = $false,
         [switch]$IncludeAllNonComplete = $false,
-        [switch]$DontexpandticketInformation = $false
+        [switch]$DontexpandticketInformation = $false,
+        [switch]$whereResourceAssigned,
+        [int]$InLastDays = $null,
+        [int]
+        $loopCount = 40,
+        [string]
+        $DoSearchBy = $null
         #$LastActionFromDate = (get-date).AddMonths(-3)
     )
     write-host "Read-AutoTaskTickets: polling autotask for ticket information"
     if (!($DontexpandticketInformation)) {
         $ticketinfo = Read-AutotaskTicketInformation
     }
-
+    [int]$u = 0
     [string]$i = $null
     $LastActionFromDateStr = $LastActionFromDate.ToString("yyyy-MM-ddTHH:mm:ss")
+    if ($InLastDays) {
+        $LastActionFromDateStr = $($(Get-Date).AddDays(0 - $InLastDays)).ToString("yyyy-MM-ddTHH:mm:ss")
+    }
     if ($companyIDs.count -gt 0) {
         [string]$cc = $CompanyIDs -join ','
         Write-verbose "Read-AutoTaskTickets companyID searched for are $cc"
         $i = '{"op":"in","Field":"CompanyID","value":[' + $cc + ']}'
+        $u =$u+1
     }
-    if ($TitleContains) {
+    if ($TitleContains -eq $true) {
         $i = ($i + ',{"op":"contains","Field":"title","value":""' + $TitleContains + '""}').Trim(',')
+        $u =$u + 1
     }
-    if ($TitleBeginsWith) {
+    if ($TitleBeginsWith -eq $true) {
         $i = ($i + ',{"op":"beginsWith","Field":"title","value":""' + $TitleBeginsWith + '""}').Trim(',')
+        $u =$u + 1
     }
+    if ($whereResourceAssigned -eq $true) {
+        #  $i = ($i + ',{"op":"exist","Field":"assignedResourceID","value":"null"}').Trim(',')
+        $i = ($i + ',{"op":"Exist","Field":"assignedResourceID"}').Trim(',')
+        $u =$u + 1
+    }
+    if ($DoSearchBy) {
+        $searchby = $DoSearchBy
+    }
+    else{
+        if ($u -gt 0) {
+            $searchby = '{"op":"and","items":[{"op":"gte","Field":"lastActivityDate","value":"' + $LastActionFromDateStr + '"}'  + ',' + $i + ']}'
+        }
+        else {
+            $searchby = '{"op":"gte","Field":"lastActivityDate","value":"' + $LastActionFromDateStr + '"}' #+ ',' + $i 
+        }
+    }
+
+
     
-    $searchby = '{"op":"gte","Field":"lastActivityDate","value":"' + $LastActionFromDateStr + '"}' + ',' + $i 
     # $searchby =$searchby -replace ' ',''
 
 
     if ($ReturnAllFields) { $includeFields = $null }
-    else {
+    elseif (!$includeFields) {
         $includeFields = ('id', 'TicketNumber', 'CompanyID', 'completedDate', 'createDate', 'firstResponseDateTime', 'lastActivityDate', 'status', 'tickettype', 'completedDate', 'title', 'assignedResourceID', 'queueid')
     }
 
+
     if ($IncludeAllNonComplete) {
         # OR two operands so that we can get noncomplete tickets as well as any other Searcth
-        $searchby = '{"op":"or","items":[{"op":"notExist","Field":"completedDate"}' + ',' + $searchby + ']}'
+    #    $searchby = '{"op":"or","items":[{"op":"notExist","Field":"completedDate"}' + ',' + $searchby + ']}'
+        $searchby = '{"op":"or","items":[{"op":"and","items":[{"op":"notExist","Field":"completedDate"},{"op":"Exist","Field":"assignedResourceID"}]}' + ',' + $searchby + ']}'
     }
 
     #write-host $i
     write-verbose "Read-AutoTaskTickets: search by : $searchby"
-    $items = Invoke-AutoTaskAPI -entityName 'v1.0/Tickets' -includeFields $includeFields  -SearchFurtherBy $searchby -SearchFirstBy Nothing
+    $items = Invoke-AutoTaskAPI -entityName 'v1.0/Tickets' -includeFields $includeFields  -SearchFurtherBy $searchby -SearchFirstBy Nothing -LoopCount $loopCount -CheckDuplicatesOf "TicketNumber"
     
     #return $items
     if ($items) {
