@@ -364,7 +364,16 @@ function Invoke-AutoTaskAPI {
 }
 
 
-function read-autotaskCompanyQuickNoteLast() {
+function read-AutoTaskLastQuickNote() {
+    [CmdletBinding()]
+    param (  )
+    $rc = Invoke-AutoTaskAPI -url "https://webservices6.autotask.net/ATServicesRest/V1.0/CompanyNotes/query?search={""IncludeFields"":[""id"",""CompanyID"",""lastModifiedDate"",""Note""],""filter"":[{""op"":""and"",""items"":[{""op"":""eq"",""field"":""actionType"",""value"":""5""},{""op"":""gt"",""field"":""lastModifiedDate"",""value"":""2018-01-01T00:00:00.00Z""}]}]}"
+    $rc = $rc | Group-Object companyID
+
+    foreach ($item in $rc) {
+        $item[0].Group | Add-Member -NotePropertyName NoteCount -NotePropertyValue $item.Count
+        ($item[0].Group | Sort-Object -Descending lastModifiedDate)[0]
+    }
 
 }
 
@@ -419,11 +428,10 @@ function Read-AutoTaskCompanyClassificationIcons() {
 function Read-AUtoTaskMostRecentCompanyTicket() {
     [CmdletBinding()]
     param (  )
-    $rc = Read-AutoTaskTickets -LastActionFromDate "2020-01-01T00:00:00" -Verbose -DontexpandticketInformation -whereResourceAssigned -includeFields ("companyID","completedDate","id","title","createDate") -DontincludeNonComplete |Group-Object companyID
+    $rc = Read-AutoTaskTickets -LastActionFromDate "2020-01-01T00:00:00" -Verbose -DontexpandticketInformation -whereResourceAssigned -includeFields ("companyID", "completedDate", "id", "title", "createDate") -DontincludeNonComplete | Group-Object companyID
     #$rc.psobject.properties.remove('userDefinedFields')
-    foreach ($item in $rc)
-    {
-        ($item[0].Group |Sort-Object -Descending completedDate)[0]
+    foreach ($item in $rc) {
+        ($item[0].Group | Sort-Object -Descending completedDate)[0]
     }
 }
 
@@ -2262,34 +2270,33 @@ function Read-AutoTaskTickets {
         [string]$cc = $CompanyIDs -join ','
         Write-verbose "Read-AutoTaskTickets companyID searched for are $cc"
         $i = '{"op":"in","Field":"CompanyID","value":[' + $cc + ']}'
-        $u =$u+1
+        $u = $u + 1
     }
     if ($TitleContains -eq $true) {
         $i = ($i + ',{"op":"contains","Field":"title","value":""' + $TitleContains + '""}').Trim(',')
-        $u =$u + 1
+        $u = $u + 1
     }
     if ($TitleBeginsWith -eq $true) {
         $i = ($i + ',{"op":"beginsWith","Field":"title","value":""' + $TitleBeginsWith + '""}').Trim(',')
-        $u =$u + 1
+        $u = $u + 1
     }
     if ($whereResourceAssigned -eq $true) {
         #  $i = ($i + ',{"op":"exist","Field":"assignedResourceID","value":"null"}').Trim(',')
         $i = ($i + ',{"op":"Exist","Field":"assignedResourceID"}').Trim(',')
-        $u =$u + 1
+        $u = $u + 1
     }
-    if ($DontincludeNonComplete -eq $true)
-    {
+    if ($DontincludeNonComplete -eq $true) {
         $i = ($i + ',{"op":"Exist","Field":"completedDate"}').Trim(',')
-        $u =$u + 1
+        $u = $u + 1
     }
 
     if ($DoSearchBy) {
         $searchby = $DoSearchBy
     }
-    else{
+    else {
         if ($u -gt 0) {
-  #          $searchby = '{"op":"and","items":[{"op":"gte","Field":"lastActivityDate","value":"' + $LastActionFromDateStr + '"}'  + ',' + $i + ']}'
-            $searchby = '{"op":"and","items":[{"op":"gte","Field":"lastActivityDate","value":"' + $LastActionFromDateStr + '"}'  + ',' + $i + ']}'
+            #          $searchby = '{"op":"and","items":[{"op":"gte","Field":"lastActivityDate","value":"' + $LastActionFromDateStr + '"}'  + ',' + $i + ']}'
+            $searchby = '{"op":"and","items":[{"op":"gte","Field":"lastActivityDate","value":"' + $LastActionFromDateStr + '"}' + ',' + $i + ']}'
         }
         else {
             $searchby = '{"op":"gte","Field":"lastActivityDate","value":"' + $LastActionFromDateStr + '"}' #+ ',' + $i 
@@ -2309,7 +2316,7 @@ function Read-AutoTaskTickets {
 
     if ($IncludeAllNonComplete -eq $true) {
         # OR two operands so that we can get noncomplete tickets as well as any other Searcth
-    #    $searchby = '{"op":"or","items":[{"op":"notExist","Field":"completedDate"}' + ',' + $searchby + ']}'
+        #    $searchby = '{"op":"or","items":[{"op":"notExist","Field":"completedDate"}' + ',' + $searchby + ']}'
         $searchby = '{"op":"or","items":[{"op":"and","items":[{"op":"notExist","Field":"completedDate"},{"op":"Exist","Field":"assignedResourceID"}]}' + ',' + $searchby + ']}'
     }
 
@@ -2419,6 +2426,3 @@ function Read-AutotaskTicketInformation {
 
     Write-Host "DONE-Read-TicketInformation Polling Autotask for Read-TicketInformation queues, status etc. values" -ForegroundColor Green
 }
-
-
-
