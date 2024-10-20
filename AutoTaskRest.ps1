@@ -425,7 +425,7 @@ function Read-AutoTaskCompanyClassificationIcons() {
     $rc
 }
 
-function Read-AUtoTaskMostRecentCompanyTicket() {
+function Read-AutoTaskMostRecentCompanyTicket() {
     [CmdletBinding()]
     param (  )
     $rc = Read-AutoTaskTickets -LastActionFromDate "2020-01-01T00:00:00" -Verbose -DontexpandticketInformation -whereResourceAssigned -includeFields ("companyID", "completedDate", "id", "title", "createDate") -DontincludeNonComplete | Group-Object companyID
