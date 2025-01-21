@@ -4,7 +4,8 @@ $global:kissATAPIfile = 'kissAtapilogin.json'
 
 # check for to test REST API  https://webservices6.autotask.net/ATServicesRest/swagger/ui/index
 # Check for REST API information - such as entitis and calling methods and syntax
-#https://autotask.net/help/DeveloperHelp/Content/APIs/REST/REST_API_Home.htm
+#
+
 #generic filter to use {"filter":[{"op":"gte","field":"id","value":"0"}]}
 
 
