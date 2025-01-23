@@ -789,7 +789,7 @@ function Read-CompanyAlert() {
 }
 
 
-function Set-ATContact {
+function Set-AutotaskContact {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)]
@@ -801,9 +801,6 @@ function Set-ATContact {
         [Parameter(Mandatory = $false)]
         [switch]
         $SetunknownEmail 
-
-        
-
     )
 
 
@@ -818,27 +815,17 @@ function Set-ATContact {
                 $obj | Add-Member -NotePropertyName "emailAddress3" -NotePropertyValue $Contact.emailAddress
             }
             $json = $obj | ConvertTo-Json -Compress 
-            write-Host "Set-ATContact  $obj"
+            write-Host "Set-AutotaskContact  $obj"
             Invoke-AutoTaskAPIREST -url "V1.0/Companies/$companyID/Contacts" -Method PATCH -Body $json  | Out-Null
 
             return
         }
     
-        # if ($eMail) {
-        #     $obj = [PSCustomObject]@{
-        #         id           = $Contact.id
-        #         emailAddress = $eMail
-        #     } 
-        #     $json = $obj | ConvertTo-Json -Compress
-        #     write-Host "Set-AutotaskContactupdate  $obj"
-        #     Invoke-AutoTaskAPIREST -url 'V1.0/Contacts' -Method POST -Body $json  | Out-Null
-        #     return
-        # }
     }
 
 }
 
-function Read-ATContacts() {
+function Read-AutotaskContacts() {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $false)]
@@ -857,9 +844,7 @@ function Read-ATContacts() {
         return
     }
     Write-Host "Polling Autotask for Contacts  "
-    $u = Invoke-AutoTaskAPI -entityName 'v1.0/Contacts' 
-    $u
-
+    return Invoke-AutoTaskAPI -entityName 'v1.0/Contacts' 
 }
 
 function Read-CompanyChildAlerts() {
