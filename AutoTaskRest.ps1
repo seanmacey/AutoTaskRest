@@ -340,7 +340,8 @@ function Invoke-AutoTaskAPI {
     Write-verbose "getting  $entityname items  $url2"
     $Result = Invoke-RestMethod -Method Get -Uri $url2  -Headers $kissATheader  #-SkipHeaderValidation
     $RecordsRecieved = $Result.pageDetails.Count
-    $apidata = $Result.items 
+    $apidata = $Result.items
+    $apidata
     Write-Verbose "retrieved $RecordsRecieved records: which should equal $($apidata.count)"
     Write-Verbose "returned PageDetails `n$($Result.pageDetails |ConvertTo-Json)"
 
@@ -352,16 +353,20 @@ function Invoke-AutoTaskAPI {
 
         if ($CheckDuplicatesOf) {
             $alreadyCapturedData += $apidata
-            $apidata += Invoke-AutoTaskAPI -url $Nextpage -LoopCount ($LoopCount - 1) -CheckDuplicatesOf $CheckDuplicatesOf -alreadyCapturedData $alreadyCapturedData
+            $apidataT = Invoke-AutoTaskAPI -url $Nextpage -LoopCount ($LoopCount - 1) -CheckDuplicatesOf $CheckDuplicatesOf -alreadyCapturedData $alreadyCapturedData
+            $apidata += $apidataT
+            $apidataT
         }
         else {
-            $apidata += Invoke-AutoTaskAPI -url $Nextpage -LoopCount ($LoopCount - 1) 
+            $apidataT = Invoke-AutoTaskAPI -url $Nextpage -LoopCount ($LoopCount - 1)
+            $apidata += $apidataT
+            $apidataT
         }
 
 
     }
     Write-Verbose "Invoke-AutoTaskAPI total Returned items = $($apidata.count)"
-    return $apidata
+    return #$apidata
 }
 
 
@@ -781,6 +786,80 @@ function Read-CompanyAlert() {
     if ($u) {
         $u[0].alertText
     }
+}
+
+
+function Set-ATContact {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [psobject]
+        $Contact,
+        [Parameter(Mandatory = $false)]
+        [string]
+        $eMail,
+        [Parameter(Mandatory = $false)]
+        [switch]
+        $SetunknownEmail 
+
+        
+
+    )
+
+
+    if (($Contact.id -gt -1)-and ($contact.companyID -gt -1)) {
+        $companyID = $contact.companyID
+        if ($SetunknownEmail -eq $true) {
+             $obj = [PSCustomObject]@{
+                id           = $Contact.id
+                emailAddress = "unknown@unknown.co.nz"
+            } 
+            if (!$contact.emailAddress3){
+                $obj | Add-Member -NotePropertyName "emailAddress3" -NotePropertyValue $Contact.emailAddress
+            }
+            $json = $obj | ConvertTo-Json -Compress 
+            write-Host "Set-ATContact  $obj"
+            Invoke-AutoTaskAPIREST -url "V1.0/Companies/$companyID/Contacts" -Method PATCH -Body $json  | Out-Null
+
+            return
+        }
+    
+        # if ($eMail) {
+        #     $obj = [PSCustomObject]@{
+        #         id           = $Contact.id
+        #         emailAddress = $eMail
+        #     } 
+        #     $json = $obj | ConvertTo-Json -Compress
+        #     write-Host "Set-AutotaskContactupdate  $obj"
+        #     Invoke-AutoTaskAPIREST -url 'V1.0/Contacts' -Method POST -Body $json  | Out-Null
+        #     return
+        # }
+    }
+
+}
+
+function Read-ATContacts() {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $false)]
+        [int]
+        $ID = -1,
+        [Parameter(Mandatory = $false)]
+        [string]
+        $eMail
+    )
+    if ($ID -ge 0 ) {
+        Invoke-AutoTaskAPI -entityName 'v1.0/Contacts' -SearchFirstBy id -ID $ID
+        return
+    }
+    if ($eMail) {
+        Invoke-AutoTaskAPI -entityName 'v1.0/Contacts' -SearchFirstBy Nothing -SearchFurtherBy "{""op"":""eq"",""Field"":""emailAddress"",""value"":""$eMail""}"
+        return
+    }
+    Write-Host "Polling Autotask for Contacts  "
+    $u = Invoke-AutoTaskAPI -entityName 'v1.0/Contacts' 
+    $u
+
 }
 
 function Read-CompanyChildAlerts() {
