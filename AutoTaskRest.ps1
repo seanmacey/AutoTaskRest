@@ -792,7 +792,7 @@ function Read-CompanyAlert() {
 function Set-AutotaskContact {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $true, ValueFromPipeline, ValueFromPipelineByPropertyName)]
         [psobject]
         $Contact,
         [Parameter(Mandatory = $false)]
@@ -800,26 +800,55 @@ function Set-AutotaskContact {
         $eMail,
         [Parameter(Mandatory = $false)]
         [switch]
-        $SetunknownEmail 
+        $SetunknownEmail,
+        [Parameter(Mandatory = $false)]
+        [string]
+        [validateset("True","False","NoChange")]
+        $isOptedOutFromBulkEmail
+
+
     )
 
-
-    if (($Contact.id -gt -1)-and ($contact.companyID -gt -1)) {
-        $companyID = $contact.companyID
-        if ($SetunknownEmail -eq $true) {
-             $obj = [PSCustomObject]@{
+    begin {
+        
+    }
+    
+    process {
+        if (($Contact.id -gt -1) -and ($contact.companyID -gt -1)) {
+            $companyID = $contact.companyID
+            $obj = [PSCustomObject]@{
                 id           = $Contact.id
-                emailAddress = "unknown@unknown.co.nz"
+              #  emailAddress = "unknown@unknown.co.nz"
             } 
-            if (!$contact.emailAddress3){
-                $obj | Add-Member -NotePropertyName "emailAddress3" -NotePropertyValue $Contact.emailAddress
-            }
-            $json = $obj | ConvertTo-Json -Compress 
-            write-Host "Set-AutotaskContact  $obj"
-            Invoke-AutoTaskAPIREST -url "V1.0/Companies/$companyID/Contacts" -Method PATCH -Body $json  | Out-Null
+            if ($SetunknownEmail -eq $true) {
+                    $obj | Add-Member -NotePropertyName "emailAddress" -NotePropertyValue "unknown@unknown.co.nz"
+                # $obj = [PSCustomObject]@{
+                #     id           = $Contact.id
+                #     emailAddress = "unknown@unknown.co.nz"
 
-            return
+                # } 
+                if (!$contact.emailAddress3) {
+                    $obj | Add-Member -NotePropertyName "emailAddress3" -NotePropertyValue $Contact.emailAddress
+                }
+            }
+
+                if ($isOptedOutFromBulkEmail -eq "True")
+                {
+                     write-verbose "set contact opted out TRUE"
+                    $obj | Add-Member -NotePropertyName "isOptedOutFromBulkEmail" -NotePropertyValue "True"
+                }
+                if ($isOptedOutFromBulkEmail -eq "False"){
+                    write-verbose "set contact opted out FALSE"
+                    $obj | Add-Member -NotePropertyName "isOptedOutFromBulkEmail" -NotePropertyValue "FALSE"
+                }
+            
+                $json = $obj | ConvertTo-Json -Compress 
+                write-Host "Set-AutotaskContact  $obj"
+                Invoke-AutoTaskAPIREST -url "V1.0/Companies/$companyID/Contacts" -Method PATCH -Body $json  | Out-Null
+    
         }
+    }
+    end {
     
     }
 
@@ -828,23 +857,44 @@ function Set-AutotaskContact {
 function Read-AutotaskContacts() {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $false)]
+        [Parameter(Mandatory = $false, ValueFromPipeline, ValueFromPipelineByPropertyName)]
         [int]
         $ID = -1,
-        [Parameter(Mandatory = $false)]
+        [Parameter(Mandatory = $false, ValueFromPipeline, ValueFromPipelineByPropertyName)]
         [string]
         $eMail
     )
-    if ($ID -ge 0 ) {
-        Invoke-AutoTaskAPI -entityName 'v1.0/Contacts' -SearchFirstBy id -ID $ID
-        return
+    begin {
+        
     }
-    if ($eMail) {
-        Invoke-AutoTaskAPI -entityName 'v1.0/Contacts' -SearchFirstBy Nothing -SearchFurtherBy "{""op"":""eq"",""Field"":""emailAddress"",""value"":""$eMail""}"
-        return
+    process {
+        switch ($x) {
+            { $ID -ge 0 } { 
+                Write-Host "Polling Autotask for Contact with ID of $ID  "
+                Invoke-AutoTaskAPI -entityName 'v1.0/Contacts' -SearchFirstBy id -ID $ID
+                break
+            }
+            { $eMail.Length -gt 0 } {
+                Write-Host "Polling Autotask for Contact with email of $email  "
+                Invoke-AutoTaskAPI -entityName 'v1.0/Contacts' -SearchFirstBy Nothing -SearchFurtherBy "{""op"":""eq"",""Field"":""emailAddress"",""value"":""$eMail""}"
+                break
+            }
+            Default {
+                Write-Host "Polling Autotask for Contacts  "
+                Invoke-AutoTaskAPI -entityName 'v1.0/Contacts' 
+            }
+            #     }
+            # if ($ID -ge 0 ) {
+            #     return
+            # }
+            # if ($eMail) {
+            #     Invoke-AutoTaskAPI -entityName 'v1.0/Contacts' -SearchFirstBy Nothing -SearchFurtherBy "{""op"":""eq"",""Field"":""emailAddress"",""value"":""$eMail""}"
+            #     return
+            # }
+
+        }
     }
-    Write-Host "Polling Autotask for Contacts  "
-    return Invoke-AutoTaskAPI -entityName 'v1.0/Contacts' 
+    end {}
 }
 
 function Read-CompanyChildAlerts() {
