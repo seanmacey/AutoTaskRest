@@ -790,6 +790,34 @@ function Read-CompanyAlert() {
 
 
 function Set-AutotaskContact {
+    <#
+    .SYNOPSIS
+    modify a contact
+    
+    .DESCRIPTION
+    update contact infromations (email and whether contact has opted pout of bulk emails)
+    will accept an array of contact objects to be piped into it (so can process bulk contacts from CSV)
+    
+    .PARAMETER Contact
+    Parameter description
+    
+    .PARAMETER eMail
+   email address
+    
+    .PARAMETER SetunknownEmail
+    if this is true, then set the email to unknown@unknown.co.nz
+    
+    .PARAMETER isOptedOutFromBulkEmail
+    sets (or unsets) the contact from bulkemail outs
+    
+    .EXAMPLE
+    $a = read-AutotaskContacts -eMail trevor@belvedereconstruction.co.nz
+    $a | Set-AutotaskContact -isOptedOutFromBulkEmail False
+    $a | Set-AutotaskContact -isOptedOutFromBulkEmail $true
+    
+    .NOTES
+    General notes
+    #>
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline, ValueFromPipelineByPropertyName)]
@@ -854,7 +882,29 @@ function Set-AutotaskContact {
 
 }
 
+
+
 function Read-AutotaskContacts() {
+    <#
+    .SYNOPSIS
+    get an array of contacts from Autotask
+    
+    .DESCRIPTION
+    get an array of contacts from Autotask, by ID , or emailaddress
+    
+    .PARAMETER ID
+    the autotask ID of a contact
+    
+    .PARAMETER eMail
+    the emailaddress of a contact(s)
+    
+    .EXAMPLE
+    $a = read-AutotaskContacts -id 29692052
+    
+    .NOTES
+    General notes
+    #>
+   
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $false, ValueFromPipeline, ValueFromPipelineByPropertyName)]
